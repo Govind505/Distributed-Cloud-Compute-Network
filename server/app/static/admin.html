@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCCN — Administrator Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- Header -->
+  <header class="glass sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center shadow-lg">
+          <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <span class="text-lg font-bold text-white tracking-tight">Administrator Governance Console</span>
+          <span class="text-[11px] px-2 py-0.5 ml-2 rounded-full bg-purple-950 text-purple-300 border border-purple-800 font-mono font-bold">Admin Authority</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
+          <div class="w-2 h-2 rounded-full bg-purple-400"></div>
+          <span>admin@dccn.network</span>
+        </div>
+        <a href="/login" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          <span>Switch Portal</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Body -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+    
+    <!-- Top Stats -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cluster Fleet</div>
+        <div class="text-3xl font-extrabold text-white mt-1" id="statNodes">4</div>
+        <div class="text-xs text-emerald-400 mt-1" id="statOnline">4 online</div>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Compute Power</div>
+        <div class="text-3xl font-extrabold text-indigo-400 mt-1" id="statCpu">40 Cores</div>
+        <div class="text-xs text-indigo-300 mt-1" id="statRam">78.0 GB RAM</div>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">GPU Accelerators</div>
+        <div class="text-3xl font-extrabold text-purple-400 mt-1" id="statGpu">3 Devices</div>
+        <div class="text-xs text-purple-300 mt-1">26 GB VRAM Available</div>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Global Workloads</div>
+        <div class="text-3xl font-extrabold text-amber-400 mt-1" id="statJobs">3</div>
+        <div class="text-xs text-amber-300 mt-1" id="statQueued">0 in queue</div>
+      </div>
+    </div>
+
+    <!-- Cluster Fleet Management & Approvals -->
+    <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-base font-bold text-white">Cluster Fleet Governance & Node Approvals</h2>
+          <p class="text-xs text-slate-400">Approve pending machines into the cluster and monitor active reservations</p>
+        </div>
+        <button onclick="scheduleAll()" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow">
+          <i data-lucide="play" class="w-3.5 h-3.5"></i>
+          <span>Schedule All Queued Workloads</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+            <tr>
+              <th class="p-3">Node Name & Host</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">CPU Cores</th>
+              <th class="p-3">RAM</th>
+              <th class="p-3">GPU Accelerator</th>
+              <th class="p-3">Heartbeat</th>
+              <th class="p-3 text-right">Admin Actions</th>
+            </tr>
+          </thead>
+          <tbody id="nodesTable" class="divide-y divide-slate-800">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 7-Factor Weighted Policy Weights Tuner -->
+    <div class="glass-card p-6 rounded-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center space-x-2">
+            <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i>
+            <span>Multi-Resource 7-Factor Weighted Policy Weights</span>
+          </h2>
+          <p class="text-xs text-slate-400">Scheduler utility weights specified in Section 2.1 of the Project Synopsis</p>
+        </div>
+        <span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs font-mono font-bold">Sum = 1.00</span>
+      </div>
+
+      <div class="p-3.5 rounded-xl bg-slate-900/90 font-mono text-xs text-indigo-300">
+        $$\text{Score}(i,j) = 0.22 \cdot C + 0.18 \cdot M + 0.25 \cdot G + 0.12 \cdot L + 0.08 \cdot N + 0.10 \cdot R + 0.05 \cdot P$$
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-xs font-mono text-center">
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-blue-400 font-bold block text-sm">0.22</span>
+          <span class="text-slate-400 text-[11px]">C (Free CPU)</span>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-cyan-400 font-bold block text-sm">0.18</span>
+          <span class="text-slate-400 text-[11px]">M (Free RAM)</span>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-purple-400 font-bold block text-sm">0.25</span>
+          <span class="text-slate-400 text-[11px]">G (GPU Match)</span>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-emerald-400 font-bold block text-sm">0.12</span>
+          <span class="text-slate-400 text-[11px]">L (Inverse Load)</span>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-yellow-400 font-bold block text-sm">0.08</span>
+          <span class="text-slate-400 text-[11px]">N (Low Latency)</span>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-pink-400 font-bold block text-sm">0.10</span>
+          <span class="text-slate-400 text-[11px]">R (Reliability)</span>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+          <span class="text-amber-400 font-bold block text-sm">0.05</span>
+          <span class="text-slate-400 text-[11px]">P (Bin Packing)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security & Audit Trail -->
+    <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-base font-bold text-white">Append-Only Audit Trail</h2>
+          <p class="text-xs text-slate-400">Verifiable chronological audit log of cluster decisions and operations</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+            <tr>
+              <th class="p-3">Timestamp</th>
+              <th class="p-3">Action</th>
+              <th class="p-3">Target</th>
+              <th class="p-3">Outcome</th>
+              <th class="p-3">Evidence Details</th>
+            </tr>
+          </thead>
+          <tbody id="auditTable" class="divide-y divide-slate-800">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let token = localStorage.getItem('dccn_token') || '';
+
+    async function loadData() {
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      // Load nodes
+      try {
+        const nr = await fetch('/api/v1/nodes/', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (nr.ok) {
+          const nodes = await nr.json();
+          document.getElementById('statNodes').textContent = nodes.length;
+          let online = 0; let cores = 0; let ram = 0; let gpus = 0;
+          nodes.forEach(n => {
+            if (n.status === 'online') online++;
+            cores += n.cpu_cores;
+            ram += n.ram_total_mb;
+            gpus += n.gpu_count;
+          });
+          document.getElementById('statOnline').textContent = `${online} online`;
+          document.getElementById('statCpu').textContent = `${cores} Cores`;
+          document.getElementById('statRam').textContent = `${(ram/1024).toFixed(1)} GB RAM`;
+          document.getElementById('statGpu').textContent = `${gpus} Devices`;
+
+          const tbody = document.getElementById('nodesTable');
+          tbody.innerHTML = '';
+          nodes.forEach(node => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3">
+                <span class="font-bold text-white text-xs">${node.name}</span>
+                <span class="block text-[10px] text-slate-500">${node.hostname}</span>
+              </td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded text-[10px] ${node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : (node.status === 'pending_approval' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-slate-800 text-slate-400')}">
+                  ${node.status.toUpperCase()}
+                </span>
+              </td>
+              <td class="p-3">${node.cpu_cores} Cores</td>
+              <td class="p-3">${(node.ram_total_mb / 1024).toFixed(1)} GB</td>
+              <td class="p-3">${node.gpu_count > 0 ? `<span class="text-purple-400 font-bold">${node.gpu_count}x ${node.gpu_model}</span>` : 'None'}</td>
+              <td class="p-3 text-[10px] text-slate-400">${node.last_seen ? new Date(node.last_seen).toLocaleTimeString() : 'Never'}</td>
+              <td class="p-3 text-right space-x-1.5">
+                ${node.status === 'pending_approval' ? `<button onclick="approveNode('${node.id}')" class="px-2.5 py-1 bg-emerald-900 text-emerald-300 rounded text-[10px]">Approve</button>` : ''}
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {}
+
+      // Load audit logs
+      try {
+        const ar = await fetch('/api/v1/admin/audit?limit=15', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (ar.ok) {
+          const logs = await ar.json();
+          const tbody = document.getElementById('auditTable');
+          tbody.innerHTML = '';
+          logs.forEach(log => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3 text-slate-500">${new Date(log.created_at).toLocaleTimeString()}</td>
+              <td class="p-3 text-blue-300 font-bold">${log.action}</td>
+              <td class="p-3 text-slate-300">${log.target_type} (${log.target_id.substring(0,8)}...)</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400">${log.outcome}</span></td>
+              <td class="p-3 text-[10px] text-slate-400 font-mono">${log.details ? JSON.stringify(log.details) : '—'}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {}
+    }
+
+    async function approveNode(nodeId) {
+      await fetch(`/api/v1/nodes/${nodeId}/approve`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+      loadData();
+    }
+
+    async function scheduleAll() {
+      await fetch('/api/v1/scheduler/schedule-all', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+      loadData();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadData();
+      setInterval(loadData, 5000);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCCN — Enterprise Compute Portal Gateway</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-input { background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.12); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+  <div class="max-w-md w-full space-y-6">
+    <!-- Brand Header -->
+    <div class="text-center space-y-2">
+      <div class="inline-flex w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 items-center justify-center shadow-xl">
+        <i data-lucide="cpu" class="w-6 h-6 text-white"></i>
+      </div>
+      <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+        Distributed Cloud Compute Network
+      </h1>
+      <p class="text-xs text-slate-400">Select your role to open your dedicated, separate workspace</p>
+    </div>
+
+    <!-- Quick Role Portals Cards -->
+    <div class="space-y-3 font-mono text-xs">
+      <!-- 1. Compute Client Portal -->
+      <a href="javascript:void(0)" onclick="loginAs('client@dccn.network', 'client123', '/client')" class="glass-card block p-4 rounded-2xl hover:border-blue-500/60 hover:bg-slate-900 transition group cursor-pointer border border-slate-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="p-2.5 rounded-xl bg-blue-950 text-blue-400 group-hover:scale-105 transition">
+              <i data-lucide="terminal" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Compute Client Portal</h3>
+              <p class="text-[11px] text-slate-400 font-sans mt-0.5">Submit container workloads & inspect scheduler fit</p>
+            </div>
+          </div>
+          <span class="text-blue-400 text-xs font-bold flex items-center space-x-1 group-hover:translate-x-1 transition">
+            <span>Enter</span>
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </span>
+        </div>
+      </a>
+
+      <!-- 2. Provider Portal -->
+      <a href="javascript:void(0)" onclick="loginAs('provider@dccn.network', 'provider123', '/provider')" class="glass-card block p-4 rounded-2xl hover:border-emerald-500/60 hover:bg-slate-900 transition group cursor-pointer border border-slate-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="p-2.5 rounded-xl bg-emerald-950 text-emerald-400 group-hover:scale-105 transition">
+              <i data-lucide="hard-drive" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Compute Provider Portal</h3>
+              <p class="text-[11px] text-slate-400 font-sans mt-0.5">Enroll compute hosts, agent tokens & availability</p>
+            </div>
+          </div>
+          <span class="text-emerald-400 text-xs font-bold flex items-center space-x-1 group-hover:translate-x-1 transition">
+            <span>Enter</span>
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </span>
+        </div>
+      </a>
+
+      <!-- 3. Admin Portal -->
+      <a href="javascript:void(0)" onclick="loginAs('admin@dccn.network', 'admin123', '/admin')" class="glass-card block p-4 rounded-2xl hover:border-purple-500/60 hover:bg-slate-900 transition group cursor-pointer border border-slate-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="p-2.5 rounded-xl bg-purple-950 text-purple-400 group-hover:scale-105 transition">
+              <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Administrator Console</h3>
+              <p class="text-[11px] text-slate-400 font-sans mt-0.5">Fleet approval, 7-factor weights & audit trail</p>
+            </div>
+          </div>
+          <span class="text-purple-400 text-xs font-bold flex items-center space-x-1 group-hover:translate-x-1 transition">
+            <span>Enter</span>
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Footnote -->
+    <div class="text-center text-xs text-slate-500 font-mono">
+      <span>Distributed Cloud Compute Network • Decentralized Infrastructure</span>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    async function loginAs(email, password, redirectUrl) {
+      try {
+        const resp = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          localStorage.setItem('dccn_token', data.access_token);
+          localStorage.setItem('dccn_email', email);
+          window.location.href = redirectUrl;
+        } else {
+          // Register if account doesn't exist yet
+          const role = email.includes('admin') ? 'admin' : (email.includes('provider') ? 'compute_provider' : 'compute_user');
+          await fetch('/api/v1/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, username: email.split('@')[0], password, role })
+          });
+          const retry = await fetch('/api/v1/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          if (retry.ok) {
+            const data = await retry.json();
+            localStorage.setItem('dccn_token', data.access_token);
+            localStorage.setItem('dccn_email', email);
+            window.location.href = redirectUrl;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        window.location.href = redirectUrl;
+      }
+    }
+  </script>
+</body>
+</html>

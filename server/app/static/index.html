@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCCN — Distributed Cloud Compute Network</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+    .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-input { background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.12); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- Top Navigation Header -->
+  <header class="glass sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg">
+          <i data-lucide="cpu" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">DCCN Platform</span>
+          <span class="text-[11px] px-2 py-0.5 ml-2 rounded-full bg-blue-950 text-blue-300 border border-blue-800/60 font-mono font-semibold">Cloud Fabric</span>
+        </div>
+      </div>
+
+      <!-- Role Switcher & Active Role Indicator -->
+      <div class="flex items-center space-x-3">
+        <!-- Interactive Quick Role Switch Buttons -->
+        <div class="hidden md:flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs font-medium">
+          <button onclick="selectQuickUser('client@dccn.network', 'client123', 'compute_user')" id="roleBtn-client" class="px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 text-slate-400 hover:text-white">
+            <i data-lucide="user" class="w-3.5 h-3.5"></i>
+            <span>Compute Client</span>
+          </button>
+          <button onclick="selectQuickUser('provider@dccn.network', 'provider123', 'compute_provider')" id="roleBtn-provider" class="px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 text-slate-400 hover:text-white">
+            <i data-lucide="hard-drive" class="w-3.5 h-3.5"></i>
+            <span>Compute Provider</span>
+          </button>
+          <button onclick="selectQuickUser('admin@dccn.network', 'admin123', 'admin')" id="roleBtn-admin" class="px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 text-slate-400 hover:text-white">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span>Admin</span>
+          </button>
+        </div>
+
+        <button onclick="openLoginModal()" class="md:hidden px-3 py-1.5 text-xs bg-slate-800 text-slate-200 rounded-lg border border-slate-700">
+          Switch User
+        </button>
+
+        <button onclick="refreshAll()" class="p-2 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-lg border border-slate-800 transition" title="Refresh Telemetry">
+          <i data-lucide="refresh-cw" class="w-4 h-4" id="refreshIcon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Role Context Banner -->
+  <div id="roleContextBanner" class="border-b border-slate-800 py-3 bg-slate-900/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+      <div class="flex items-center space-x-2">
+        <span id="roleBadge" class="px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px]"></span>
+        <span id="roleUserEmail" class="text-slate-400 font-mono"></span>
+      </div>
+      <div id="roleDescription" class="text-slate-400 font-medium"></div>
+    </div>
+  </div>
+
+  <!-- Main Content Layout -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- Dynamic Role Navigation Tabs -->
+    <div class="flex border-b border-slate-800 space-x-4 text-sm font-semibold" id="navigationTabs">
+      <!-- Injected per user role -->
+    </div>
+
+    <!-- ========================================================== -->
+    <!-- ROLE VIEW 1: COMPUTE CLIENT                        -->
+    <!-- ========================================================== -->
+    <div id="roleView-compute_user" class="space-y-6 hidden">
+      <!-- Client Top Stats -->
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Submitted Workloads</p>
+          <h3 class="text-3xl font-extrabold text-blue-400 mt-1" id="clientTotalJobs">0</h3>
+          <p class="text-xs text-slate-400 mt-1">Docker-isolated jobs</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Cluster Cores</p>
+          <h3 class="text-3xl font-extrabold text-indigo-400 mt-1" id="clientAvailableCores">0 Cores</h3>
+          <p class="text-xs text-emerald-400 mt-1">Free for assignment</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available GPU Nodes</p>
+          <h3 class="text-3xl font-extrabold text-purple-400 mt-1" id="clientAvailableGpus">0 GPUs</h3>
+          <p class="text-xs text-purple-300 mt-1">NVIDIA AI acceleration</p>
+        </div>
+      </section>
+
+      <!-- Client Tabs Content -->
+      <div id="clientTab-submit" class="glass-card p-6 rounded-2xl space-y-5">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i data-lucide="play" class="w-5 h-5 text-blue-400"></i>
+              <span>Workload Submission Studio</span>
+            </h3>
+            <p class="text-xs text-slate-400">Declare computational limits. The 7-factor scheduler will find the optimal machine.</p>
+          </div>
+          <span class="px-2.5 py-1 rounded-lg bg-blue-950 text-blue-300 border border-blue-800/60 text-xs font-mono">Approved Images Only</span>
+        </div>
+
+        <form id="clientJobForm" onsubmit="handleJobSubmit(event)" class="space-y-4 text-xs font-mono">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Workload Job Name</label>
+              <input type="text" id="jobName" required placeholder="e.g. PyTorch ResNet50 Training" class="w-full px-3 py-2 rounded-xl glass-input text-white focus:outline-none focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Approved Container Image (OCI)</label>
+              <select id="jobImage" class="w-full px-3 py-2 rounded-xl glass-input text-white focus:outline-none focus:border-blue-500">
+                <option value="python:3.11-slim">python:3.11-slim (CPU Numpy / Data Analysis)</option>
+                <option value="pytorch/pytorch:latest">pytorch/pytorch:latest (PyTorch GPU / AI Training)</option>
+                <option value="ubuntu:22.04">ubuntu:22.04 (File Compression / C++ Benchmark)</option>
+                <option value="tensorflow/tensorflow:latest-gpu">tensorflow:latest-gpu (Deep Learning Inference)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">Container Execution Command (Optional)</label>
+            <input type="text" id="jobCommand" placeholder="python train.py --batch 64 --epochs 20" class="w-full px-3 py-2 rounded-xl glass-input text-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+            <div>
+              <label class="block text-slate-400 mb-1">CPU Request (Cores)</label>
+              <input type="number" id="jobCpu" value="2.0" step="0.5" min="0.5" max="32" class="w-full px-3 py-1.5 rounded-lg glass-input text-white">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">RAM Request (MB)</label>
+              <input type="number" id="jobRam" value="2048" step="256" min="256" max="65536" class="w-full px-3 py-1.5 rounded-lg glass-input text-white">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">GPU Accelerator</label>
+              <select id="jobGpuCount" class="w-full px-3 py-1.5 rounded-lg glass-input text-white">
+                <option value="0">None (CPU-only)</option>
+                <option value="1">1x NVIDIA GPU</option>
+                <option value="2">2x NVIDIA GPUs</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Min VRAM (MB)</label>
+              <input type="number" id="jobVram" value="0" step="1024" min="0" class="w-full px-3 py-1.5 rounded-lg glass-input text-white">
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white font-bold rounded-xl shadow-lg transition flex items-center space-x-2">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              <span>Queue & Dispatch Workload</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Client Workloads Queue -->
+      <div id="clientTab-myjobs" class="glass-card rounded-2xl overflow-hidden space-y-3 p-5">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="text-base font-bold text-white">My Workload Queue & Execution Timeline</h3>
+            <p class="text-xs text-slate-400">Track placement, execution logs, and scheduling scoring for your jobs</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+              <tr>
+                <th class="p-3">Job Name</th>
+                <th class="p-3">Docker Image</th>
+                <th class="p-3">State</th>
+                <th class="p-3">Declared Limits</th>
+                <th class="p-3">Assigned Node</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="clientJobsTableBody" class="divide-y divide-slate-800 font-mono">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================================== -->
+    <!-- ROLE VIEW 2: COMPUTE PROVIDER      -->
+    <!-- ========================================================== -->
+    <div id="roleView-compute_provider" class="space-y-6 hidden">
+      <!-- Provider Top Stats -->
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Contributed Nodes</p>
+          <h3 class="text-3xl font-extrabold text-emerald-400 mt-1" id="providerNodesCount">0</h3>
+          <p class="text-xs text-slate-400 mt-1">Reporting via Node Agent</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Node Availability</p>
+          <h3 class="text-3xl font-extrabold text-blue-400 mt-1" id="providerOnlineCount">0 Online</h3>
+          <p class="text-xs text-emerald-400 mt-1">Ready for container dispatch</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent Heartbeat Interval</p>
+          <h3 class="text-3xl font-extrabold text-indigo-400 mt-1">10s</h3>
+          <p class="text-xs text-slate-400 mt-1">Telemetry sampled every 5s</p>
+        </div>
+      </section>
+
+      <!-- Provider Node Enrollment Instructions Card -->
+      <div class="glass-card p-6 rounded-2xl border-l-4 border-emerald-500 space-y-4">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
+              <span>Enroll a New Workstation into the Compute Pool</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Install the Python agent daemon on any compute workstation or server host to volunteer its idle CPU/GPU power.</p>
+          </div>
+          <button onclick="openNodeRegisterModal()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Register Machine Identity</span>
+          </button>
+        </div>
+
+        <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 space-y-2 font-mono text-xs">
+          <div class="text-slate-400">1. Clone agent repository on the volunteer PC:</div>
+          <div class="text-emerald-300 bg-slate-950 p-2 rounded-lg border border-slate-800 select-all">git clone https://github.com/dccn/agent.git && cd dccn-agent && pip install -r requirements.txt</div>
+          <div class="text-slate-400 mt-2">2. Start agent daemon with provider authentication:</div>
+          <div class="text-emerald-300 bg-slate-950 p-2 rounded-lg border border-slate-800 select-all">python agent.py --name "Compute-Node-05" --email provider@dccn.network --password provider123</div>
+        </div>
+      </div>
+
+      <!-- Provider Nodes Table -->
+      <div class="glass-card rounded-2xl overflow-hidden p-5 space-y-3">
+        <h3 class="text-base font-bold text-white">My Volunteer Machines & Live Hardware Telemetry</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+              <tr>
+                <th class="p-3">Host & Machine Name</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">CPU Cores</th>
+                <th class="p-3">Memory Capacity</th>
+                <th class="p-3">GPU Hardware</th>
+                <th class="p-3">Last Heartbeat</th>
+                <th class="p-3 text-right">Availability Switch</th>
+              </tr>
+            </thead>
+            <tbody id="providerNodesTableBody" class="divide-y divide-slate-800 font-mono">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================================== -->
+    <!-- ROLE VIEW 3: ADMINISTRATOR (CENTRAL CLUSTER GOVERNANCE)     -->
+    <!-- ========================================================== -->
+    <div id="roleView-admin" class="space-y-6 hidden">
+      <!-- Admin Top Metrics Grid -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cluster Nodes</p>
+          <h3 class="text-3xl font-extrabold text-white mt-1" id="adminNodesTotal">4</h3>
+          <p class="text-xs text-emerald-400 mt-1" id="adminNodesOnline">4 online</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Compute Power</p>
+          <h3 class="text-3xl font-extrabold text-indigo-400 mt-1" id="adminCpuTotal">40 Cores</h3>
+          <p class="text-xs text-indigo-300 mt-1" id="adminRamTotal">78.0 GB RAM</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">GPU Fleet</p>
+          <h3 class="text-3xl font-extrabold text-purple-400 mt-1" id="adminGpuTotal">3 Devices</h3>
+          <p class="text-xs text-purple-300 mt-1">26 GB VRAM Available</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Global Workloads</p>
+          <h3 class="text-3xl font-extrabold text-amber-400 mt-1" id="adminJobsTotal">3</h3>
+          <p class="text-xs text-amber-300 mt-1" id="adminJobsQueued">0 in queue</p>
+        </div>
+      </section>
+
+      <!-- Admin Tabs: Nodes / Policy / Audit -->
+      <div id="adminTabContent-fleet" class="glass-card rounded-2xl overflow-hidden p-5 space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="text-base font-bold text-white">Cluster Fleet Management & Node Approvals</h3>
+            <p class="text-xs text-slate-400">Approve pending machines, inspect telemetry, or drain machines from the cluster</p>
+          </div>
+          <button onclick="triggerScheduleAll()" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            <span>Schedule All Queued Jobs</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+              <tr>
+                <th class="p-3">Node Name & Host</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">CPU Cores</th>
+                <th class="p-3">RAM</th>
+                <th class="p-3">GPU Accelerator</th>
+                <th class="p-3">Heartbeat</th>
+                <th class="p-3 text-right">Admin Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminNodesTableBody" class="divide-y divide-slate-800 font-mono">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Admin Policy & Weights Panel -->
+      <div id="adminTabContent-policy" class="glass-card p-6 rounded-2xl space-y-4">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i>
+              <span>Multi-Resource 7-Factor Weighted Policy Weights</span>
+            </h3>
+            <p class="text-xs text-slate-400">Configurable scheduler tuning parameters from Section 2.1 of project synopsis</p>
+          </div>
+          <span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 text-xs font-mono font-bold">Sum = 1.00</span>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-slate-900/90 font-mono text-xs text-indigo-300">
+          $$\text{Score}(i,j) = 0.22 \cdot C + 0.18 \cdot M + 0.25 \cdot G + 0.12 \cdot L + 0.08 \cdot N + 0.10 \cdot R + 0.05 \cdot P$$
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-xs font-mono text-center">
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-blue-400 font-bold block text-sm">0.22</span>
+            <span class="text-slate-400 text-[11px]">C (Free CPU)</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-cyan-400 font-bold block text-sm">0.18</span>
+            <span class="text-slate-400 text-[11px]">M (Free RAM)</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-purple-400 font-bold block text-sm">0.25</span>
+            <span class="text-slate-400 text-[11px]">G (GPU Match)</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-emerald-400 font-bold block text-sm">0.12</span>
+            <span class="text-slate-400 text-[11px]">L (Inverse Load)</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-yellow-400 font-bold block text-sm">0.08</span>
+            <span class="text-slate-400 text-[11px]">N (Low Latency)</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-pink-400 font-bold block text-sm">0.10</span>
+            <span class="text-slate-400 text-[11px]">R (Reliability)</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+            <span class="text-amber-400 font-bold block text-sm">0.05</span>
+            <span class="text-slate-400 text-[11px]">P (Bin Packing)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Audit Log Table -->
+      <div id="adminTabContent-audit" class="glass-card rounded-2xl overflow-hidden p-5 space-y-3">
+        <h3 class="text-base font-bold text-white">Append-Only Audit Trail</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+              <tr>
+                <th class="p-3">Timestamp</th>
+                <th class="p-3">Action</th>
+                <th class="p-3">Target</th>
+                <th class="p-3">Outcome</th>
+                <th class="p-3">Evidence Details</th>
+              </tr>
+            </thead>
+            <tbody id="adminAuditTableBody" class="divide-y divide-slate-800 font-mono">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Node Register Modal -->
+  <div id="nodeRegisterModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card bg-slate-900 max-w-md w-full rounded-2xl border border-slate-700 p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center space-x-2">
+          <i data-lucide="hard-drive" class="w-5 h-5 text-emerald-400"></i>
+          <span>Register New Compute Node</span>
+        </h3>
+        <button onclick="closeNodeRegisterModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="nodeRegisterForm" onsubmit="handleNodeRegister(event)" class="space-y-3 text-xs font-mono">
+        <div>
+          <label class="block text-slate-400 mb-1">Node Display Name</label>
+          <input type="text" id="nodeName" required placeholder="Compute-Node-03" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Hostname / Domain</label>
+          <input type="text" id="nodeHostname" required placeholder="Compute-Node-03.dccn.local" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">CPU Cores</label>
+            <input type="number" id="nodeCpu" value="8" min="1" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">RAM (MB)</label>
+            <input type="number" id="nodeRam" value="16384" step="1024" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">GPU Model (Optional)</label>
+            <input type="text" id="nodeGpuModel" placeholder="NVIDIA RTX 3080" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">GPU Count</label>
+            <input type="number" id="nodeGpuCount" value="0" min="0" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+          </div>
+        </div>
+        <div class="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeNodeRegisterModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow">Register</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Switch User Modal (Mobile) -->
+  <div id="loginModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card bg-slate-900 max-w-sm w-full rounded-2xl border border-slate-700 p-6 space-y-3 text-xs font-mono">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="text-base font-bold text-white">Switch Role Persona</h3>
+        <button onclick="closeLoginModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <button onclick="selectQuickUser('client@dccn.network', 'client123', 'compute_user')" class="w-full p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left">
+        <div class="font-bold text-blue-400">Compute Client</div>
+        <div class="text-[10px] text-slate-500">Submit jobs, view allocations</div>
+      </button>
+      <button onclick="selectQuickUser('provider@dccn.network', 'provider123', 'compute_provider')" class="w-full p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left">
+        <div class="font-bold text-emerald-400">Compute Provider</div>
+        <div class="text-[10px] text-slate-500">Enroll nodes, check telemetry</div>
+      </button>
+      <button onclick="selectQuickUser('admin@dccn.network', 'admin123', 'admin')" class="w-full p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left">
+        <div class="font-bold text-purple-400">Administrator</div>
+        <div class="text-[10px] text-slate-500">Approvals, policy, audit logs</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Role-Tailored Frontend Script -->
+  <script>
+    const API_BASE = '/api/v1';
+    let currentToken = localStorage.getItem('dccn_token') || '';
+    let currentRole = localStorage.getItem('dccn_role') || 'compute_user';
+    let currentEmail = localStorage.getItem('dccn_email') || 'client@dccn.network';
+
+    let globalNodes = [];
+    let globalJobs = [];
+
+    // Role Configuration Metadata
+    const ROLES = {
+      'compute_user': {
+        title: 'Compute Client',
+        badgeBg: 'bg-blue-950 text-blue-300 border border-blue-800',
+        description: 'Submit jobs, set CPU/GPU constraints, and inspect explainable scheduler placement decisions.',
+        btnId: 'roleBtn-client',
+        viewId: 'roleView-compute_user',
+        tabs: [
+          { id: 'submit', label: 'Submit Workload', icon: 'plus-circle' },
+          { id: 'myjobs', label: 'My Jobs & Timeline', icon: 'list' }
+        ]
+      },
+      'compute_provider': {
+        title: 'Compute Provider',
+        badgeBg: 'bg-emerald-950 text-emerald-300 border border-emerald-800',
+        description: 'Volunteer machines, view local utilization graphs, and manage node availability.',
+        btnId: 'roleBtn-provider',
+        viewId: 'roleView-compute_provider',
+        tabs: [
+          { id: 'nodes', label: 'Contributed Nodes', icon: 'server' },
+          { id: 'enroll', label: 'Enrollment Guide', icon: 'terminal' }
+        ]
+      },
+      'admin': {
+        title: 'Administrator',
+        badgeBg: 'bg-purple-950 text-purple-300 border border-purple-800',
+        description: 'Cluster health governance, node approvals, 7-factor policy tuning, and audit trails.',
+        btnId: 'roleBtn-admin',
+        viewId: 'roleView-admin',
+        tabs: [
+          { id: 'fleet', label: 'Cluster Fleet', icon: 'server' },
+          { id: 'policy', label: 'Scheduler Policy', icon: 'sliders' },
+          { id: 'audit', label: 'Audit Trail', icon: 'shield-check' }
+        ]
+      }
+    };
+
+    async function initAuth() {
+      if (!currentToken) {
+        await selectQuickUser('client@dccn.network', 'client123', 'compute_user');
+      } else {
+        applyRoleUI(currentRole);
+      }
+    }
+
+    function applyRoleUI(role) {
+      const config = ROLES[role] || ROLES['compute_user'];
+
+      // Update Header Badges
+      ['roleBtn-client', 'roleBtn-provider', 'roleBtn-admin'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.className = 'px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
+      });
+      const activeBtn = document.getElementById(config.btnId);
+      if (activeBtn) activeBtn.className = 'px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 bg-slate-800 text-white font-bold shadow';
+
+      const badge = document.getElementById('roleBadge');
+      badge.textContent = config.title;
+      badge.className = `px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] ${config.badgeBg}`;
+
+      document.getElementById('roleUserEmail').textContent = currentEmail;
+      document.getElementById('roleDescription').textContent = config.description;
+
+      // Show the dedicated role view and hide others
+      ['roleView-compute_user', 'roleView-compute_provider', 'roleView-admin'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+      });
+      document.getElementById(config.viewId).classList.remove('hidden');
+
+      // Build Navigation Tabs
+      const tabsContainer = document.getElementById('navigationTabs');
+      tabsContainer.innerHTML = '';
+      config.tabs.forEach((tab, index) => {
+        const btn = document.createElement('button');
+        btn.className = index === 0
+          ? 'pb-3 border-b-2 border-blue-500 text-blue-400 flex items-center space-x-2'
+          : 'pb-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2';
+        btn.innerHTML = `<i data-lucide="${tab.icon}" class="w-4 h-4"></i><span>${tab.label}</span>`;
+        tabsContainer.appendChild(btn);
+      });
+
+      lucide.createIcons();
+    }
+
+    async function selectQuickUser(email, password, role) {
+      try {
+        const resp = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          currentToken = data.access_token;
+          currentRole = role;
+          currentEmail = email;
+          localStorage.setItem('dccn_token', currentToken);
+          localStorage.setItem('dccn_role', currentRole);
+          localStorage.setItem('dccn_email', currentEmail);
+          applyRoleUI(role);
+          closeLoginModal();
+          refreshAll();
+        } else {
+          // Register first if first run
+          await fetch(`${API_BASE}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, username: email.split('@')[0], password, role })
+          });
+          const retryResp = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          if (retryResp.ok) {
+            const data = await retryResp.json();
+            currentToken = data.access_token;
+            currentRole = role;
+            currentEmail = email;
+            localStorage.setItem('dccn_token', currentToken);
+            localStorage.setItem('dccn_role', currentRole);
+            localStorage.setItem('dccn_email', currentEmail);
+            applyRoleUI(role);
+            closeLoginModal();
+            refreshAll();
+          }
+        }
+      } catch (e) {
+        console.error('Login error', e);
+      }
+    }
+
+    function authHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      };
+    }
+
+    function openNodeRegisterModal() { document.getElementById('nodeRegisterModal').classList.remove('hidden'); }
+    function closeNodeRegisterModal() { document.getElementById('nodeRegisterModal').classList.add('hidden'); }
+    function openLoginModal() { document.getElementById('loginModal').classList.remove('hidden'); }
+    function closeLoginModal() { document.getElementById('loginModal').classList.add('hidden'); }
+
+    // Refresh all endpoints
+    async function refreshAll() {
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.classList.add('animate-spin');
+      try {
+        await Promise.all([
+          loadNodes(),
+          loadJobs(),
+          loadAuditLogs()
+        ]);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (icon) setTimeout(() => icon.classList.remove('animate-spin'), 400);
+      }
+    }
+
+    async function loadNodes() {
+      try {
+        const resp = await fetch(`${API_BASE}/nodes/`, { headers: authHeaders() });
+        if (!resp.ok) return;
+        globalNodes = await resp.json();
+
+        let totalCores = 0;
+        let totalRam = 0;
+        let totalGpus = 0;
+        let onlineCount = 0;
+
+        globalNodes.forEach(node => {
+          totalCores += node.cpu_cores;
+          totalRam += node.ram_total_mb;
+          totalGpus += node.gpu_count;
+          if (node.status === 'online') onlineCount++;
+        });
+
+        // Update Client stats
+        const clientCoresEl = document.getElementById('clientAvailableCores');
+        if (clientCoresEl) clientCoresEl.textContent = `${totalCores} Cores`;
+        const clientGpusEl = document.getElementById('clientAvailableGpus');
+        if (clientGpusEl) clientGpusEl.textContent = `${totalGpus} GPUs`;
+
+        // Update Provider stats
+        const provNodesEl = document.getElementById('providerNodesCount');
+        if (provNodesEl) provNodesEl.textContent = globalNodes.length;
+        const provOnlineEl = document.getElementById('providerOnlineCount');
+        if (provOnlineEl) provOnlineEl.textContent = `${onlineCount} Online`;
+
+        // Update Admin stats
+        const adminTotalEl = document.getElementById('adminNodesTotal');
+        if (adminTotalEl) adminTotalEl.textContent = globalNodes.length;
+        const adminOnlineEl = document.getElementById('adminNodesOnline');
+        if (adminOnlineEl) adminOnlineEl.textContent = `${onlineCount} online`;
+        const adminCpuEl = document.getElementById('adminCpuTotal');
+        if (adminCpuEl) adminCpuEl.textContent = `${totalCores} Cores`;
+        const adminRamEl = document.getElementById('adminRamTotal');
+        if (adminRamEl) adminRamEl.textContent = `${(totalRam / 1024).toFixed(1)} GB RAM`;
+        const adminGpuEl = document.getElementById('adminGpuTotal');
+        if (adminGpuEl) adminGpuEl.textContent = `${totalGpus} Devices`;
+
+        // Render Provider Nodes Table
+        const provTbody = document.getElementById('providerNodesTableBody');
+        if (provTbody) {
+          provTbody.innerHTML = '';
+          globalNodes.forEach(node => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3">
+                <span class="font-bold text-white">${node.name}</span>
+                <span class="text-slate-500 block text-[10px]">${node.hostname}</span>
+              </td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] ${node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'}">${node.status.toUpperCase()}</span></td>
+              <td class="p-3">${node.cpu_cores} Cores</td>
+              <td class="p-3">${(node.ram_total_mb / 1024).toFixed(1)} GB</td>
+              <td class="p-3">${node.gpu_count > 0 ? `<span class="text-purple-400 font-bold">${node.gpu_count}x ${node.gpu_model}</span>` : 'None'}</td>
+              <td class="p-3 text-[10px] text-slate-400">${node.last_seen ? new Date(node.last_seen).toLocaleTimeString() : 'Never'}</td>
+              <td class="p-3 text-right">
+                <button onclick="toggleDrain('${node.id}', '${node.status}')" class="px-2.5 py-1 rounded text-[10px] font-bold ${node.status === 'drained' ? 'bg-emerald-900 text-emerald-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">
+                  ${node.status === 'drained' ? 'Resume' : 'Drain'}
+                </button>
+              </td>
+            `;
+            provTbody.appendChild(tr);
+          });
+        }
+
+        // Render Admin Nodes Table
+        const adminTbody = document.getElementById('adminNodesTableBody');
+        if (adminTbody) {
+          adminTbody.innerHTML = '';
+          globalNodes.forEach(node => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3">
+                <span class="font-bold text-white">${node.name}</span>
+                <span class="text-slate-500 block text-[10px]">${node.hostname}</span>
+              </td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] ${node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : (node.status === 'pending_approval' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-slate-800 text-slate-400')}">${node.status.toUpperCase()}</span></td>
+              <td class="p-3">${node.cpu_cores} Cores</td>
+              <td class="p-3">${(node.ram_total_mb / 1024).toFixed(1)} GB</td>
+              <td class="p-3">${node.gpu_count > 0 ? `<span class="text-purple-400 font-bold">${node.gpu_count}x ${node.gpu_model}</span>` : 'None'}</td>
+              <td class="p-3 text-[10px] text-slate-400">${node.last_seen ? new Date(node.last_seen).toLocaleTimeString() : 'Never'}</td>
+              <td class="p-3 text-right space-x-1.5">
+                ${node.status === 'pending_approval' ? `<button onclick="approveNode('${node.id}')" class="px-2.5 py-1 bg-emerald-900 text-emerald-300 rounded text-[10px]">Approve</button>` : ''}
+                <button onclick="toggleDrain('${node.id}', '${node.status}')" class="px-2 py-1 bg-slate-800 text-slate-400 hover:text-white rounded text-[10px]">
+                  ${node.status === 'drained' ? 'Activate' : 'Drain'}
+                </button>
+              </td>
+            `;
+            adminTbody.appendChild(tr);
+          });
+        }
+
+      } catch (e) { console.error(e); }
+    }
+
+    async function approveNode(nodeId) {
+      await fetch(`${API_BASE}/nodes/${nodeId}/approve`, { method: 'POST', headers: authHeaders() });
+      refreshAll();
+    }
+
+    async function toggleDrain(nodeId, currentStatus) {
+      const newStatus = currentStatus === 'drained' ? 'online' : 'drained';
+      await fetch(`${API_BASE}/nodes/${nodeId}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ status: newStatus })
+      });
+      refreshAll();
+    }
+
+    async function loadJobs() {
+      try {
+        const resp = await fetch(`${API_BASE}/jobs/`, { headers: authHeaders() });
+        if (!resp.ok) return;
+        globalJobs = await resp.json();
+
+        // Update counts
+        const clientCountEl = document.getElementById('clientTotalJobs');
+        if (clientCountEl) clientCountEl.textContent = globalJobs.length;
+        const adminJobsEl = document.getElementById('adminJobsTotal');
+        if (adminJobsEl) adminJobsEl.textContent = globalJobs.length;
+
+        // Render Client Jobs Table
+        const clientTbody = document.getElementById('clientJobsTableBody');
+        if (clientTbody) {
+          clientTbody.innerHTML = '';
+          globalJobs.forEach(job => {
+            const req = job.requirements || {};
+            const alloc = (job.allocations && job.allocations.length > 0) ? job.allocations[0] : null;
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3">
+                <div class="font-bold text-white">${job.name}</div>
+                <div class="text-[10px] text-slate-500">${job.id.substring(0,8)}...</div>
+              </td>
+              <td class="p-3 text-blue-300 font-mono">${job.image_name}</td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded-full text-[10px] ${job.state === 'allocated' || job.state === 'running' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-slate-800 text-slate-400'}">
+                  ${job.state.toUpperCase()}
+                </span>
+              </td>
+              <td class="p-3 text-[11px] text-slate-400">
+                ${req.cpu_cores || 1} CPU | ${req.ram_mb || 512}MB RAM
+                ${req.gpu_count ? ` | <span class="text-purple-400 font-bold">${req.gpu_count} GPU</span>` : ''}
+              </td>
+              <td class="p-3">
+                ${alloc ? `<span class="text-indigo-300 font-bold">Node ${alloc.node_id.substring(0,8)}...</span> <span class="text-emerald-400 text-[10px]">(Score: ${alloc.score.toFixed(3)})</span>` : '<span class="text-slate-600">—</span>'}
+              </td>
+              <td class="p-3 text-right">
+                ${job.state === 'queued' ? `<button onclick="triggerScheduleSingle('${job.id}')" class="px-2.5 py-1 bg-indigo-900 hover:bg-indigo-700 text-indigo-200 rounded text-[10px]">Schedule</button>` : ''}
+                ${alloc ? `<button onclick="showAllocationScoreBreakdown('${job.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Explain Fit</button>` : ''}
+              </td>
+            `;
+            clientTbody.appendChild(tr);
+          });
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    function showAllocationScoreBreakdown(jobId) {
+      const job = globalJobs.find(j => j.id === jobId);
+      if (!job || !job.allocations || job.allocations.length === 0) return;
+      const alloc = job.allocations[0];
+      const bd = alloc.score_breakdown || {};
+      alert(`7-Factor Placement Explanation for "${job.name}":\n\n` +
+            `• Selected Node: ${alloc.node_id}\n` +
+            `• Composite Score: ${alloc.score.toFixed(4)} / 1.000\n\n` +
+            `Factor Breakdown:\n` +
+            ` - CPU Free (0.22): ${bd.cpu !== undefined ? bd.cpu.toFixed(3) : '—'}\n` +
+            ` - RAM Free (0.18): ${bd.memory !== undefined ? bd.memory.toFixed(3) : '—'}\n` +
+            ` - GPU Fit (0.25): ${bd.gpu !== undefined ? bd.gpu.toFixed(3) : '—'}\n` +
+            ` - Inverse Load (0.12): ${bd.load !== undefined ? bd.load.toFixed(3) : '—'}\n` +
+            ` - Low Latency (0.08): ${bd.network !== undefined ? bd.network.toFixed(3) : '—'}\n` +
+            ` - Reliability (0.10): ${bd.reliability !== undefined ? bd.reliability.toFixed(3) : '—'}\n` +
+            ` - Bin Packing (0.05): ${bd.packing !== undefined ? bd.packing.toFixed(3) : '—'}`);
+    }
+
+    async function handleJobSubmit(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('jobName').value,
+        image_name: document.getElementById('jobImage').value,
+        command: document.getElementById('jobCommand').value || null,
+        priority: 5,
+        timeout_seconds: 1800,
+        requirements: {
+          cpu_cores: parseFloat(document.getElementById('jobCpu').value),
+          ram_mb: parseInt(document.getElementById('jobRam').value),
+          disk_mb: 1024,
+          gpu_count: parseInt(document.getElementById('jobGpuCount').value),
+          gpu_vram_mb: parseInt(document.getElementById('jobVram').value)
+        }
+      };
+
+      const resp = await fetch(`${API_BASE}/jobs/`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        document.getElementById('jobName').value = '';
+        refreshAll();
+      } else {
+        alert('Job submission failed: ' + (await resp.text()));
+      }
+    }
+
+    async function triggerScheduleSingle(jobId) {
+      const resp = await fetch(`${API_BASE}/scheduler/schedule/${jobId}`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      if (resp.ok) {
+        refreshAll();
+      }
+    }
+
+    async function triggerScheduleAll() {
+      await fetch(`${API_BASE}/scheduler/schedule-all`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      refreshAll();
+    }
+
+    async function handleNodeRegister(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('nodeName').value,
+        hostname: document.getElementById('nodeHostname').value,
+        cpu_cores: parseInt(document.getElementById('nodeCpu').value),
+        ram_total_mb: parseInt(document.getElementById('nodeRam').value),
+        disk_total_mb: 512000,
+        gpu_model: document.getElementById('nodeGpuModel').value || null,
+        gpu_count: parseInt(document.getElementById('nodeGpuCount').value) || 0
+      };
+
+      const resp = await fetch(`${API_BASE}/nodes/register`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        closeNodeRegisterModal();
+        refreshAll();
+      } else {
+        alert('Node registration failed: ' + (await resp.text()));
+      }
+    }
+
+    async function loadAuditLogs() {
+      try {
+        const resp = await fetch(`${API_BASE}/admin/audit?limit=15`, { headers: authHeaders() });
+        if (!resp.ok) return;
+        const logs = await resp.json();
+        const tbody = document.getElementById('adminAuditTableBody');
+        if (tbody) {
+          tbody.innerHTML = '';
+          logs.forEach(log => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3 text-slate-500">${new Date(log.created_at).toLocaleTimeString()}</td>
+              <td class="p-3 text-blue-300 font-bold">${log.action}</td>
+              <td class="p-3 text-slate-300">${log.target_type} (${log.target_id.substring(0,8)}...)</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400">${log.outcome}</span></td>
+              <td class="p-3 text-[10px] text-slate-400 font-mono">${log.details ? JSON.stringify(log.details) : '—'}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await initAuth();
+      await refreshAll();
+      // Auto-poll telemetry every 5s
+      setInterval(refreshAll, 5000);
+    });
+  </script>
+</body>
+</html>
+
