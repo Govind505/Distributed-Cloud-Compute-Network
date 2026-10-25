@@ -5,12 +5,24 @@ from app.api import auth, nodes, jobs, admin, scheduler
 
 settings = get_settings()
 
+from contextlib import asynccontextmanager
+from app.database_seeder import auto_init_and_seed_db
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await auto_init_and_seed_db()
+    except Exception as e:
+        print(f"[DCCN Startup Error] {e}")
+    yield
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="A distributed compute network for dynamic resource allocation",
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS middleware

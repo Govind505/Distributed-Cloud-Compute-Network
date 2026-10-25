@@ -4,33 +4,18 @@ A distributed cloud compute network for dynamic resource allocation — pools id
 
 ## Quick Start
 
-### 1. Start Infrastructure
+### 1-Click Launch (Recommended)
+Double-click **`run_demo.bat`** (Windows) or run:
 ```bash
-docker-compose up -d
+python run.py
 ```
+This automatically verifies port 8000, initializes the database schema, seeds the cluster with 4 compute nodes and 3 enterprise accounts, boots the FastAPI control server, and opens **`http://localhost:8000/login`** in your browser.
 
-### 2. Install Server Dependencies
+### Manual Execution
 ```bash
 cd server
 pip install -r requirements.txt
-```
-
-### 3. Initialize Database
-```bash
-cd server
-python init_db.py
-```
-
-### 4. Run the Server
-```bash
-cd server
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 5. Seed Demo Data
-```bash
-cd agent
-python seed_demo.py
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### 6. Access Dedicated Portals

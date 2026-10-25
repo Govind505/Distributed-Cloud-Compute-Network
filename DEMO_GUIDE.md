@@ -5,26 +5,21 @@
 
 ---
 
-## ⚡ 1-Minute Quick Start (Before Your Presentation)
+## ⚡ 1-Click Instant Start (Double-Click or Run Anytime)
 
-### Step 1: Start Infrastructure & Server
-Open a terminal in the project directory:
-```bash
-# Option A: Double-click run_demo.bat
-# Option B: Run manually:
-cd server
-python init_db.py
-uvicorn app.main:app --reload --port 8000
-```
-Open **`http://localhost:8000/dashboard`** in your browser.
+### Option A: 1-Click Launcher (Windows)
+Double-click **`run_demo.bat`** in the project folder.
 
-### Step 2: Seed the Cluster with Telemetry & Benchmark Jobs
-In a second terminal window:
+### Option B: Terminal Command (Any OS)
 ```bash
-cd agent
-python seed_demo.py
+python run.py
 ```
-> 🎉 **Instantly**, your dashboard will show **4 heterogeneous compute nodes** (2 CPU, 2 with NVIDIA RTX 3080 & Tesla T4 GPUs), live telemetry meters, and sample submitted jobs!
+
+> 🎉 **What happens automatically**:
+> 1. Port 8000 is verified and freed.
+> 2. The SQLite database schema is initialized.
+> 3. The 3 enterprise accounts (`admin`, `provider`, `client`), 4 heterogeneous compute nodes (CPU & GPU), live hardware telemetry, and benchmark workloads are automatically seeded.
+> 4. Your default browser opens directly to **`http://localhost:8000/login`**!
 
 ---
 
