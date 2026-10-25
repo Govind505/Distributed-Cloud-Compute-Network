@@ -1,16 +1,18 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.database import engine, Base, AsyncSessionLocal
 from app.models.user import User, UserRole, UserStatus
 from app.models.node import ComputeNode, NodeStatus, ResourceSnapshot
 from app.models.job import Job, JobState, JobRequirement
+from app.models.allocation import Allocation, AllocationState, Execution
 from app.utils.auth import hash_password
 from app.scheduler.scheduler import SchedulerService
+from app.services.executor import ExecutionService
 
 
 async def auto_init_and_seed_db():
-    """Automatically ensure database tables exist and are populated with demo cluster data."""
+    """Automatically ensure database tables exist and are populated with enterprise cluster data."""
     # 1. Create tables if they do not exist
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -19,8 +21,13 @@ async def auto_init_and_seed_db():
     async with AsyncSessionLocal() as db:
         res = await db.execute(select(User).where(User.email == "admin@dccn.network"))
         existing_admin = res.scalar_one_or_none()
+
         if existing_admin:
-            # Already seeded
+            # Check if any jobs need execution dispatch
+            exec_count = await db.scalar(select(func.count()).select_from(Execution))
+            if exec_count == 0:
+                executor = ExecutionService()
+                await executor.dispatch_all_allocated(db)
             return
 
         print("[DCCN] First run detected: Seeding enterprise cluster demo data...")
@@ -212,4 +219,8 @@ async def auto_init_and_seed_db():
             except Exception as e:
                 print(f"[DCCN] Scheduler init warning for job {jid}: {e}")
 
-        print("[DCCN] Cluster demo data seeded successfully: 3 users, 4 nodes, 3 workloads scheduled.")
+        # Dispatch and execute the first two workloads to generate initial logs
+        executor = ExecutionService()
+        await executor.dispatch_all_allocated(db)
+
+        print("[DCCN] Cluster demo data seeded successfully: 3 users, 4 nodes, 3 workloads scheduled and executed.")

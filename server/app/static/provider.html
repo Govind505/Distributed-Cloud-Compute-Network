@@ -6,8 +6,9 @@
   <title>DCCN — Compute Provider Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/static/auth_guard.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     body { font-family: 'Inter', sans-serif; }
     .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
     .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); }
@@ -17,7 +18,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
 
   <!-- Header -->
-  <header class="glass sticky top-0 z-50">
+  <header class="glass sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center shadow-lg">
@@ -25,19 +26,19 @@
         </div>
         <div>
           <span class="text-lg font-bold text-white tracking-tight">Compute Provider Portal</span>
-          <span class="text-[11px] px-2 py-0.5 ml-2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono font-bold">Hardware Volunteer</span>
+          <span id="navRoleBadge" class="text-[11px] px-2.5 py-0.5 ml-2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono font-bold">Compute Provider</span>
         </div>
       </div>
 
       <div class="flex items-center space-x-3">
         <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
           <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
-          <span>provider@dccn.network</span>
+          <span id="navUserEmail">provider@dccn.network</span>
         </div>
-        <a href="/login" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+        <button onclick="authGuard.logout()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
           <span>Switch Portal</span>
-        </a>
+        </button>
       </div>
     </div>
   </header>
@@ -46,7 +47,7 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
     
     <!-- Top Stats -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
       <div class="glass-card p-5 rounded-2xl">
         <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Contributed Nodes</div>
         <div class="text-3xl font-extrabold text-emerald-400 mt-1" id="provTotalNodes">4</div>
@@ -61,6 +62,11 @@
         <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent Heartbeat Interval</div>
         <div class="text-3xl font-extrabold text-indigo-400 mt-1">10s</div>
         <div class="text-xs text-slate-400 mt-1">Telemetry sampled every 5s</div>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Earned Compute Credits</div>
+        <div class="text-3xl font-extrabold text-amber-400 mt-1">1,420 DCCN</div>
+        <div class="text-xs text-slate-400 mt-1">Yield from shared vCPU/GPU</div>
       </div>
     </div>
 
@@ -82,7 +88,7 @@
 
       <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 space-y-2 font-mono text-xs">
         <div class="text-slate-400">1. Clone agent code on the compute host:</div>
-        <div class="text-emerald-300 bg-slate-950 p-2 rounded-lg border border-slate-800 select-all">git clone https://github.com/dccn/agent.git && cd agent && pip install -r requirements.txt</div>
+        <div class="text-emerald-300 bg-slate-950 p-2 rounded-lg border border-slate-800 select-all">git clone https://github.com/Govind505/Distributed-Cloud-Compute-Network.git && cd agent && pip install -r requirements.txt</div>
         <div class="text-slate-400 mt-2">2. Run agent daemon with your provider credentials:</div>
         <div class="text-emerald-300 bg-slate-950 p-2 rounded-lg border border-slate-800 select-all">python agent.py --name "Compute-Node-05" --email provider@dccn.network --password provider123</div>
       </div>
@@ -93,7 +99,7 @@
       <div class="flex justify-between items-center">
         <div>
           <h2 class="text-base font-bold text-white">My Contributed Machines & Live Telemetry</h2>
-          <p class="text-xs text-slate-400">Monitor CPU usage, free memory, and toggle availability (drain switch)</p>
+          <p class="text-xs text-slate-400">Control node availability (Drain/Resume) and monitor health</p>
         </div>
       </div>
 
@@ -101,13 +107,13 @@
         <table class="w-full text-left text-xs font-mono">
           <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
             <tr>
-              <th class="p-3">Host & Machine Name</th>
+              <th class="p-3">Host Identity</th>
               <th class="p-3">Status</th>
               <th class="p-3">CPU Cores</th>
-              <th class="p-3">Memory Capacity</th>
-              <th class="p-3">GPU Accelerator</th>
+              <th class="p-3">RAM</th>
+              <th class="p-3">GPU Hardware</th>
               <th class="p-3">Last Heartbeat</th>
-              <th class="p-3 text-right">Availability Switch</th>
+              <th class="p-3 text-right">Provider Control</th>
             </tr>
           </thead>
           <tbody id="nodesTable" class="divide-y divide-slate-800">
@@ -117,44 +123,68 @@
       </div>
     </div>
 
+    <!-- Assigned Workloads Table -->
+    <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-base font-bold text-white">Workloads Executing On My Hardware</h2>
+          <p class="text-xs text-slate-400">Client workloads assigned by the 7-factor scheduler to your compute nodes</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+            <tr>
+              <th class="p-3">Workload Name</th>
+              <th class="p-3">Container Image</th>
+              <th class="p-3">Execution State</th>
+              <th class="p-3">Assigned Host Node</th>
+              <th class="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="assignedJobsTable" class="divide-y divide-slate-800">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </main>
 
   <!-- Register Node Modal -->
-  <div id="nodeModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card bg-slate-900 max-w-md w-full rounded-2xl border border-slate-700 p-6 space-y-4 text-xs font-mono">
+  <div id="nodeModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
       <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-        <h3 class="text-base font-bold text-white flex items-center space-x-2">
-          <i data-lucide="hard-drive" class="w-5 h-5 text-emerald-400"></i>
-          <span>Register New Compute Node</span>
-        </h3>
-        <button onclick="closeModal()" class="text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <h3 class="text-white font-bold text-sm">Register Compute Node Identity</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800">
+          <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
-      <form id="regForm" onsubmit="submitNode(event)" class="space-y-3">
+      <form onsubmit="registerNode(event)" class="space-y-3 text-xs font-mono">
         <div>
-          <label class="block text-slate-400 mb-1">Display Name</label>
-          <input type="text" id="nodeName" required placeholder="Compute-Node-05" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+          <label class="block text-slate-400 mb-1">Node Display Name</label>
+          <input type="text" id="nodeName" required placeholder="e.g. Lab-Workstation-01" class="w-full px-3 py-2 rounded-xl glass-input text-white">
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">Hostname</label>
-          <input type="text" id="nodeHostname" required placeholder="worker-05.dccn.local" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+          <label class="block text-slate-400 mb-1">Hostname or IP</label>
+          <input type="text" id="nodeHostname" required placeholder="node-01.local" class="w-full px-3 py-2 rounded-xl glass-input text-white">
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-slate-400 mb-1">CPU Cores</label>
-            <input type="number" id="nodeCpu" value="8" min="1" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+            <input type="number" id="nodeCores" value="8" min="1" class="w-full px-3 py-2 rounded-xl glass-input text-white">
           </div>
           <div>
             <label class="block text-slate-400 mb-1">RAM (MB)</label>
-            <input type="number" id="nodeRam" value="16384" step="1024" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+            <input type="number" id="nodeRam" value="16384" step="1024" min="1024" class="w-full px-3 py-2 rounded-xl glass-input text-white">
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-slate-400 mb-1">GPU Model</label>
-            <input type="text" id="nodeGpu" placeholder="NVIDIA RTX 3080" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+            <label class="block text-slate-400 mb-1">GPU Model (Optional)</label>
+            <input type="text" id="nodeGpuModel" placeholder="e.g. NVIDIA RTX 3080" class="w-full px-3 py-2 rounded-xl glass-input text-white">
           </div>
           <div>
             <label class="block text-slate-400 mb-1">GPU Count</label>
@@ -169,6 +199,31 @@
     </div>
   </div>
 
+  <!-- Terminal Logs Modal -->
+  <div id="logsModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 font-mono">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h3 id="logsModalTitle" class="text-white font-bold text-sm">Execution Terminal</h3>
+          <p id="logsModalSubtitle" class="text-slate-400 text-xs">Host container runtime stdout/stderr</p>
+        </div>
+        <button onclick="closeLogsModal()" class="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <pre id="logsModalBody" class="bg-black/90 p-4 rounded-xl text-emerald-400 text-xs font-mono overflow-x-auto max-h-96 whitespace-pre-wrap select-all border border-slate-800">
+Loading logs...
+      </pre>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="closeLogsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let token = localStorage.getItem('dccn_token') || '';
 
@@ -176,13 +231,12 @@
     function closeModal() { document.getElementById('nodeModal').classList.add('hidden'); }
 
     async function loadData() {
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
+      const user = await authGuard.verifyAndEnforce(['compute_provider'], 'Compute Provider Portal');
+      if (!user) return;
+      token = authGuard.token;
 
       try {
-        const nr = await fetch('/api/v1/nodes/', { headers: { 'Authorization': `Bearer ${token}` } });
+        const nr = await fetch('/api/v1/nodes/?mine=true', { headers: { 'Authorization': `Bearer ${token}` } });
         if (nr.ok) {
           const nodes = await nr.json();
           document.getElementById('provTotalNodes').textContent = nodes.length;
@@ -192,6 +246,7 @@
           const tbody = document.getElementById('nodesTable');
           tbody.innerHTML = '';
           nodes.forEach(node => {
+            const isDrained = node.status === 'drained';
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-900/60 transition';
             tr.innerHTML = `
@@ -200,7 +255,11 @@
                 <span class="block text-[10px] text-slate-500">${node.hostname}</span>
               </td>
               <td class="p-3">
-                <span class="px-2 py-0.5 rounded text-[10px] ${node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'}">
+                <span class="px-2 py-0.5 rounded text-[10px] ${
+                  node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                  isDrained ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                  'bg-slate-800 text-slate-400'
+                }">
                   ${node.status.toUpperCase()}
                 </span>
               </td>
@@ -208,9 +267,12 @@
               <td class="p-3">${(node.ram_total_mb / 1024).toFixed(1)} GB</td>
               <td class="p-3">${node.gpu_count > 0 ? `<span class="text-purple-400 font-bold">${node.gpu_count}x ${node.gpu_model}</span>` : 'None'}</td>
               <td class="p-3 text-[10px] text-slate-400">${node.last_seen ? new Date(node.last_seen).toLocaleTimeString() : 'Never'}</td>
-              <td class="p-3 text-right">
-                <button onclick="toggleDrain('${node.id}', '${node.status}')" class="px-2.5 py-1 rounded text-[10px] font-bold ${node.status === 'drained' ? 'bg-emerald-900 text-emerald-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">
-                  ${node.status === 'drained' ? 'Resume' : 'Drain'}
+              <td class="p-3 text-right space-x-1">
+                <button onclick="toggleDrain('${node.id}', '${node.status}')" class="px-2.5 py-1 rounded text-[10px] font-bold ${isDrained ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">
+                  ${isDrained ? 'Resume' : 'Drain'}
+                </button>
+                <button onclick="deleteNode('${node.id}', '${node.name}')" class="px-2 py-1 rounded text-[10px] bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800" title="Unregister Node">
+                  Remove
                 </button>
               </td>
             `;
@@ -218,28 +280,82 @@
           });
         }
       } catch (e) {}
+
+      // Load assigned workloads
+      try {
+        const jr = await fetch('/api/v1/jobs/', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (jr.ok) {
+          const jobs = await jr.json();
+          const tbody = document.getElementById('assignedJobsTable');
+          tbody.innerHTML = '';
+          if (jobs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">No active workloads currently allocated to your machines.</td></tr>`;
+          } else {
+            jobs.forEach(j => {
+              const tr = document.createElement('tr');
+              tr.className = 'hover:bg-slate-900/60 transition';
+              tr.innerHTML = `
+                <td class="p-3 font-bold text-white text-xs">${j.name}</td>
+                <td class="p-3 text-blue-300">${j.image_name}</td>
+                <td class="p-3">
+                  <span class="px-2 py-0.5 rounded text-[10px] ${
+                    j.state === 'completed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                    j.state === 'running' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                    'bg-slate-800 text-slate-400'
+                  }">
+                    ${j.state.toUpperCase()}
+                  </span>
+                </td>
+                <td class="p-3 text-indigo-300">${j.allocations && j.allocations.length > 0 ? 'Allocated Node' : '—'}</td>
+                <td class="p-3 text-right">
+                  <button onclick="viewLogs('${j.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded text-[10px]">Host Logs</button>
+                </td>
+              `;
+              tbody.appendChild(tr);
+            });
+          }
+        }
+      } catch (e) {}
     }
 
     async function toggleDrain(nodeId, currentStatus) {
       const newStatus = currentStatus === 'drained' ? 'online' : 'drained';
-      await fetch(`/api/v1/nodes/${nodeId}`, {
+      const resp = await fetch(`/api/v1/nodes/${nodeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus })
       });
-      loadData();
+      if (resp.ok) {
+        loadData();
+      } else {
+        alert('Action failed: ' + (await resp.text()));
+      }
     }
 
-    async function submitNode(e) {
+    async function deleteNode(nodeId, nodeName) {
+      if (!confirm(`Are you sure you want to unregister compute node '${nodeName}' from the cluster?`)) return;
+      const resp = await fetch(`/api/v1/nodes/${nodeId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        loadData();
+      } else {
+        alert('Failed: ' + (await resp.text()));
+      }
+    }
+
+    async function registerNode(e) {
       e.preventDefault();
       const payload = {
         name: document.getElementById('nodeName').value,
         hostname: document.getElementById('nodeHostname').value,
-        cpu_cores: parseInt(document.getElementById('nodeCpu').value),
+        cpu_cores: parseInt(document.getElementById('nodeCores').value),
         ram_total_mb: parseInt(document.getElementById('nodeRam').value),
-        disk_total_mb: 512000,
-        gpu_model: document.getElementById('nodeGpu').value || null,
-        gpu_count: parseInt(document.getElementById('nodeGpuCount').value) || 0
+        disk_total_mb: 102400,
+        gpu_model: document.getElementById('nodeGpuModel').value || null,
+        gpu_count: parseInt(document.getElementById('nodeGpuCount').value) || 0,
+        gpu_vram_mb: parseInt(document.getElementById('nodeGpuCount').value) > 0 ? 8192 : 0,
       };
 
       const resp = await fetch('/api/v1/nodes/register', {
@@ -251,8 +367,32 @@
         closeModal();
         loadData();
       } else {
-        alert('Failed: ' + (await resp.text()));
+        alert('Registration failed: ' + (await resp.text()));
       }
+    }
+
+    async function viewLogs(jobId) {
+      document.getElementById('logsModal').classList.remove('hidden');
+      document.getElementById('logsModalBody').textContent = 'Loading host logs...';
+      try {
+        const resp = await fetch(`/api/v1/jobs/${jobId}/logs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          document.getElementById('logsModalTitle').textContent = `Logs: ${data.job_name}`;
+          document.getElementById('logsModalSubtitle').textContent = `Node: ${data.node_name || 'Assigned Host'} | Container: ${data.container_id || 'N/A'}`;
+          document.getElementById('logsModalBody').textContent = data.logs || 'No logs recorded.';
+        } else {
+          document.getElementById('logsModalBody').textContent = 'Failed: ' + (await resp.text());
+        }
+      } catch (err) {
+        document.getElementById('logsModalBody').textContent = 'Error connecting to server.';
+      }
+    }
+
+    function closeLogsModal() {
+      document.getElementById('logsModal').classList.add('hidden');
     }
 
     window.addEventListener('DOMContentLoaded', () => {

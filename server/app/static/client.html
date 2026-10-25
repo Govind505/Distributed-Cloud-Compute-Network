@@ -6,8 +6,9 @@
   <title>DCCN — Compute Client Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/static/auth_guard.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     body { font-family: 'Inter', sans-serif; }
     .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
     .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); }
@@ -17,7 +18,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
 
   <!-- Header -->
-  <header class="glass sticky top-0 z-50">
+  <header class="glass sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg">
@@ -25,19 +26,19 @@
         </div>
         <div>
           <span class="text-lg font-bold text-white tracking-tight">Compute Client Portal</span>
-          <span class="text-[11px] px-2 py-0.5 ml-2 rounded-full bg-blue-950 text-blue-300 border border-blue-800 font-mono font-bold">Client Workspace</span>
+          <span id="navRoleBadge" class="text-[11px] px-2.5 py-0.5 ml-2 rounded-full bg-blue-950 text-blue-300 border border-blue-800 font-mono font-bold">Compute Client</span>
         </div>
       </div>
 
       <div class="flex items-center space-x-3">
         <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
           <div class="w-2 h-2 rounded-full bg-blue-400"></div>
-          <span>client@dccn.network</span>
+          <span id="navUserEmail">client@dccn.network</span>
         </div>
-        <a href="/login" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+        <button onclick="authGuard.logout()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
           <span>Switch Portal</span>
-        </a>
+        </button>
       </div>
     </div>
   </header>
@@ -46,11 +47,11 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
     
     <!-- Top Stats -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
       <div class="glass-card p-5 rounded-2xl">
         <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Submitted Workloads</div>
         <div class="text-3xl font-extrabold text-blue-400 mt-1" id="myJobsCount">3</div>
-        <div class="text-xs text-slate-400 mt-1">Containerized workloads</div>
+        <div class="text-xs text-slate-400 mt-1">Active container workloads</div>
       </div>
       <div class="glass-card p-5 rounded-2xl">
         <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Cluster Cores</div>
@@ -62,6 +63,11 @@
         <div class="text-3xl font-extrabold text-purple-400 mt-1" id="clusterGpus">3 GPUs</div>
         <div class="text-xs text-purple-300 mt-1">NVIDIA RTX 3080 & Tesla T4</div>
       </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Virtual Compute Credits</div>
+        <div class="text-3xl font-extrabold text-emerald-400 mt-1">980 DCCN</div>
+        <div class="text-xs text-slate-400 mt-1">Elastic resource billing</div>
+      </div>
     </div>
 
     <!-- Workload Submission Studio -->
@@ -72,7 +78,7 @@
             <i data-lucide="cpu" class="w-5 h-5 text-blue-400"></i>
             <span>Submit Compute Workload</span>
           </h2>
-          <p class="text-xs text-slate-400">Declare computational limits. The 7-factor scheduler will allocate the optimal node.</p>
+          <p class="text-xs text-slate-400">Declare resource limits. The 7-factor scheduler will allocate the optimal node.</p>
         </div>
         <span class="px-2.5 py-1 rounded-lg bg-blue-950 text-blue-300 border border-blue-800 text-xs font-mono font-bold">Approved OCI Images</span>
       </div>
@@ -161,19 +167,43 @@
 
   </main>
 
+  <!-- Execution Logs Modal -->
+  <div id="logsModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 font-mono">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h3 id="logsModalTitle" class="text-white font-bold text-sm">Workload Execution Console</h3>
+          <p id="logsModalSubtitle" class="text-slate-400 text-xs">Standard output and runtime telemetry</p>
+        </div>
+        <button onclick="closeLogsModal()" class="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <pre id="logsModalBody" class="bg-black/90 p-4 rounded-xl text-emerald-400 text-xs font-mono overflow-x-auto max-h-96 whitespace-pre-wrap select-all border border-slate-800">
+Loading container terminal output...
+      </pre>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="closeLogsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let token = localStorage.getItem('dccn_token') || '';
     let jobsList = [];
 
     async function loadData() {
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
+      const user = await authGuard.verifyAndEnforce(['compute_user'], 'Compute Client Portal');
+      if (!user) return;
+      token = authGuard.token;
 
       // Load nodes for cluster stats
       try {
-        const nr = await fetch('/api/v1/nodes/', { headers: { 'Authorization': `Bearer ${token}` } });
+        const nr = await fetch('/api/v1/nodes/all', { headers: { 'Authorization': `Bearer ${token}` } });
         if (nr.ok) {
           const nodes = await nr.json();
           let cores = 0; let gpus = 0;
@@ -194,6 +224,10 @@
           jobsList.forEach(job => {
             const req = job.requirements || {};
             const alloc = (job.allocations && job.allocations.length > 0) ? job.allocations[0] : null;
+            const hasExec = alloc && alloc.executions && alloc.executions.length > 0;
+            const isCompleted = job.state === 'completed';
+            const isAllocated = job.state === 'allocated' || (alloc && alloc.state === 'reserved');
+
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-900/60 transition';
             tr.innerHTML = `
@@ -203,7 +237,12 @@
               </td>
               <td class="p-3 text-blue-300">${job.image_name}</td>
               <td class="p-3">
-                <span class="px-2 py-0.5 rounded text-[10px] ${job.state === 'allocated' || job.state === 'running' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-slate-800 text-slate-400'}">
+                <span class="px-2 py-0.5 rounded text-[10px] ${
+                  isCompleted ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                  job.state === 'running' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                  job.state === 'allocated' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' :
+                  'bg-slate-800 text-slate-400'
+                }">
                   ${job.state.toUpperCase()}
                 </span>
               </td>
@@ -214,8 +253,10 @@
               <td class="p-3">
                 ${alloc ? `<span class="text-indigo-300 font-bold">Node ${alloc.node_id.substring(0,8)}...</span> <span class="text-emerald-400 text-[10px]">(Score: ${alloc.score.toFixed(3)})</span>` : '<span class="text-slate-600">—</span>'}
               </td>
-              <td class="p-3 text-right">
-                ${alloc ? `<button onclick="explainFit('${job.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Explain Fit</button>` : ''}
+              <td class="p-3 text-right space-x-1">
+                ${alloc ? `<button onclick="explainFit('${job.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]" title="Explain Fit">Explain Fit</button>` : ''}
+                ${isAllocated ? `<button onclick="runJob('${job.id}')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold" title="Run Workload">Run Workload</button>` : ''}
+                <button onclick="viewLogs('${job.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded text-[10px]" title="View Output Logs">Terminal Logs</button>
               </td>
             `;
             tbody.appendChild(tr);
@@ -240,6 +281,47 @@
             ` - Network Latency (0.08): ${bd.network !== undefined ? bd.network.toFixed(3) : '—'}\n` +
             ` - Reliability (0.10): ${bd.reliability !== undefined ? bd.reliability.toFixed(3) : '—'}\n` +
             ` - Bin Packing (0.05): ${bd.packing !== undefined ? bd.packing.toFixed(3) : '—'}`);
+    }
+
+    async function runJob(jobId) {
+      try {
+        const resp = await fetch(`/api/v1/jobs/${jobId}/dispatch`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          await loadData();
+          viewLogs(jobId);
+        } else {
+          alert('Failed to dispatch: ' + (await resp.text()));
+        }
+      } catch (err) {
+        alert('Error: ' + err);
+      }
+    }
+
+    async function viewLogs(jobId) {
+      document.getElementById('logsModal').classList.remove('hidden');
+      document.getElementById('logsModalBody').textContent = 'Loading execution output...';
+      try {
+        const resp = await fetch(`/api/v1/jobs/${jobId}/logs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          document.getElementById('logsModalTitle').textContent = `Logs: ${data.job_name}`;
+          document.getElementById('logsModalSubtitle').textContent = `Node: ${data.node_name || 'Unassigned'} | Container: ${data.container_id || 'N/A'} | Exit Code: ${data.exit_code !== null ? data.exit_code : 'Running'}`;
+          document.getElementById('logsModalBody').textContent = data.logs || 'No logs recorded.';
+        } else {
+          document.getElementById('logsModalBody').textContent = 'Failed to load logs: ' + (await resp.text());
+        }
+      } catch (err) {
+        document.getElementById('logsModalBody').textContent = 'Error connecting to server.';
+      }
+    }
+
+    function closeLogsModal() {
+      document.getElementById('logsModal').classList.add('hidden');
     }
 
     async function submitJob(e) {
@@ -268,7 +350,7 @@
         document.getElementById('jobName').value = '';
         loadData();
       } else {
-        alert('Failed: ' + (await resp.text()));
+        alert('Submission failed: ' + (await resp.text()));
       }
     }
 

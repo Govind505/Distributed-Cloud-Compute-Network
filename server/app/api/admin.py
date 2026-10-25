@@ -6,9 +6,9 @@ from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.node import ComputeNode, NodeStatus
 from app.models.job import Job, JobState
-from app.models.allocation import Allocation
 from app.models.audit import AuditLog
 from app.schemas.user import UserResponse
+from app.api.auth import build_user_response
 from app.utils.dependencies import require_admin
 
 router = APIRouter(prefix="/admin", tags=["Administration"])
@@ -19,9 +19,10 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """List all users (admin only)."""
+    """List all registered users in the network with their assigned roles (Admin only)."""
     result = await db.execute(select(User).order_by(User.created_at.desc()))
-    return result.scalars().all()
+    users = result.scalars().all()
+    return [build_user_response(u) for u in users]
 
 
 @router.put("/users/{user_id}/role")
@@ -31,7 +32,7 @@ async def update_user_role(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Change a user's role (admin only)."""
+    """Change a user's RBAC role (Admin only)."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -39,9 +40,17 @@ async def update_user_role(
     try:
         user.role = UserRole(role)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {[r.value for r in UserRole]}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Must be one of: {[r.value for r in UserRole]}",
+        )
     await db.commit()
-    return {"message": f"User role updated to {role}"}
+    await db.refresh(user)
+    return {
+        "success": True,
+        "message": f"User '{user.username}' role updated to {role}",
+        "user": build_user_response(user),
+    }
 
 
 @router.get("/dashboard")
@@ -49,11 +58,9 @@ async def admin_dashboard(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Get admin dashboard stats."""
-    # Count users
+    """Get comprehensive admin dashboard metrics."""
     user_count = await db.scalar(select(func.count()).select_from(User))
-    
-    # Count nodes by status
+
     nodes_online = await db.scalar(
         select(func.count()).select_from(ComputeNode).where(ComputeNode.status == NodeStatus.ONLINE)
     )
@@ -62,7 +69,6 @@ async def admin_dashboard(
         select(func.count()).select_from(ComputeNode).where(ComputeNode.status == NodeStatus.PENDING_APPROVAL)
     )
 
-    # Count jobs by state
     jobs_queued = await db.scalar(
         select(func.count()).select_from(Job).where(Job.state == JobState.QUEUED)
     )
@@ -100,7 +106,7 @@ async def list_audit_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Get recent audit logs (admin only)."""
+    """Get recent immutable audit trail entries (Admin only)."""
     result = await db.execute(
         select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
     )

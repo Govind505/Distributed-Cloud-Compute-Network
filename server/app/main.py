@@ -1,12 +1,35 @@
-from fastapi import FastAPI
+import os
+import asyncio
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import get_settings
+from app.database import get_db, AsyncSessionLocal
+from app.database_seeder import auto_init_and_seed_db
+from app.services.watchdog import WatchdogService
+from app.utils.dependencies import require_admin
 from app.api import auth, nodes, jobs, admin, scheduler
 
 settings = get_settings()
+watchdog_service = WatchdogService()
 
-from contextlib import asynccontextmanager
-from app.database_seeder import auto_init_and_seed_db
+
+async def run_periodic_watchdog():
+    """Background task checking node heartbeat status every 30 seconds."""
+    while True:
+        try:
+            await asyncio.sleep(30)
+            async with AsyncSessionLocal() as db:
+                await watchdog_service.check_nodes_health(db)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[DCCN Watchdog Error] {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,12 +37,20 @@ async def lifespan(app: FastAPI):
         await auto_init_and_seed_db()
     except Exception as e:
         print(f"[DCCN Startup Error] {e}")
+
+    watchdog_task = asyncio.create_task(run_periodic_watchdog())
     yield
+    watchdog_task.cancel()
+    try:
+        await watchdog_task
+    except asyncio.CancelledError:
+        pass
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="A distributed compute network for dynamic resource allocation",
-    version="0.1.0",
+    description="A distributed cloud compute network for dynamic resource allocation and heterogeneous cluster orchestration",
+    version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -33,10 +64,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-import os
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 # Include routers
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
@@ -67,7 +94,6 @@ async def client_page():
     return {"status": "ok"}
 
 
-
 @app.get("/provider")
 async def provider_page():
     prov_file = os.path.join(STATIC_DIR, "provider.html")
@@ -91,17 +117,27 @@ async def dashboard():
         return FileResponse(index_file)
     return {
         "name": settings.PROJECT_NAME,
-        "version": "0.1.0",
+        "version": "1.0.0",
         "status": "running",
         "docs": "/docs",
     }
+
+
+@app.post(f"{settings.API_V1_PREFIX}/system/watchdog-check")
+async def trigger_watchdog_check(
+    db: AsyncSession = Depends(get_db),
+    _admin = Depends(require_admin),
+):
+    """Manually trigger node heartbeat check and failover eviction (Admin only)."""
+    return await watchdog_service.check_nodes_health(db)
 
 
 @app.get("/api")
 async def api_info():
     return {
         "name": settings.PROJECT_NAME,
-        "version": "0.1.0",
+        "version": "1.0.0",
+        "status": "running",
         "docs": "/docs",
     }
 

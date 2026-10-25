@@ -30,6 +30,18 @@ class JobRequirementResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ExecutionResponse(BaseModel):
+    id: uuid.UUID
+    allocation_id: uuid.UUID
+    container_id: str | None
+    exit_code: int | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    logs: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class AllocationResponse(BaseModel):
     id: uuid.UUID
     node_id: uuid.UUID
@@ -38,6 +50,7 @@ class AllocationResponse(BaseModel):
     attempt: int
     state: str
     created_at: datetime
+    executions: list[ExecutionResponse] = []
 
     model_config = {"from_attributes": True}
 
@@ -57,6 +70,16 @@ class JobResponse(BaseModel):
     allocations: list[AllocationResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class JobLogResponse(BaseModel):
+    job_id: uuid.UUID
+    job_name: str
+    state: str
+    node_name: str | None
+    container_id: str | None
+    exit_code: int | None
+    logs: str | None
 
 
 class ScheduleResponse(BaseModel):

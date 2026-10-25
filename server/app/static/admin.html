@@ -6,8 +6,9 @@
   <title>DCCN — Administrator Console</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/static/auth_guard.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     body { font-family: 'Inter', sans-serif; }
     .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
     .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); }
@@ -16,7 +17,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
 
   <!-- Header -->
-  <header class="glass sticky top-0 z-50">
+  <header class="glass sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center shadow-lg">
@@ -24,19 +25,19 @@
         </div>
         <div>
           <span class="text-lg font-bold text-white tracking-tight">Administrator Governance Console</span>
-          <span class="text-[11px] px-2 py-0.5 ml-2 rounded-full bg-purple-950 text-purple-300 border border-purple-800 font-mono font-bold">Admin Authority</span>
+          <span id="navRoleBadge" class="text-[11px] px-2.5 py-0.5 ml-2 rounded-full bg-purple-950 text-purple-300 border border-purple-800 font-mono font-bold">Admin Authority</span>
         </div>
       </div>
 
       <div class="flex items-center space-x-3">
         <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
           <div class="w-2 h-2 rounded-full bg-purple-400"></div>
-          <span>admin@dccn.network</span>
+          <span id="navUserEmail">admin@dccn.network</span>
         </div>
-        <a href="/login" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+        <button onclick="authGuard.logout()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
           <span>Switch Portal</span>
-        </a>
+        </button>
       </div>
     </div>
   </header>
@@ -70,15 +71,21 @@
 
     <!-- Cluster Fleet Management & Approvals -->
     <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
-      <div class="flex justify-between items-center">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <h2 class="text-base font-bold text-white">Cluster Fleet Governance & Node Approvals</h2>
           <p class="text-xs text-slate-400">Approve pending machines into the cluster and monitor active reservations</p>
         </div>
-        <button onclick="scheduleAll()" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow">
-          <i data-lucide="play" class="w-3.5 h-3.5"></i>
-          <span>Schedule All Queued Workloads</span>
-        </button>
+        <div class="flex space-x-2">
+          <button onclick="scheduleAll()" class="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            <span>Schedule Queued</span>
+          </button>
+          <button onclick="dispatchAll()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+            <span>Dispatch All Workloads</span>
+          </button>
+        </div>
       </div>
 
       <div class="overflow-x-auto">
@@ -101,61 +108,12 @@
       </div>
     </div>
 
-    <!-- 7-Factor Weighted Policy Weights Tuner -->
-    <div class="glass-card p-6 rounded-2xl space-y-4">
-      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-        <div>
-          <h2 class="text-base font-bold text-white flex items-center space-x-2">
-            <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i>
-            <span>Multi-Resource 7-Factor Weighted Policy Weights</span>
-          </h2>
-          <p class="text-xs text-slate-400">Scheduler utility weights specified in Section 2.1 of the Project Synopsis</p>
-        </div>
-        <span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs font-mono font-bold">Sum = 1.00</span>
-      </div>
-
-      <div class="p-3.5 rounded-xl bg-slate-900/90 font-mono text-xs text-indigo-300">
-        $$\text{Score}(i,j) = 0.22 \cdot C + 0.18 \cdot M + 0.25 \cdot G + 0.12 \cdot L + 0.08 \cdot N + 0.10 \cdot R + 0.05 \cdot P$$
-      </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-xs font-mono text-center">
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-blue-400 font-bold block text-sm">0.22</span>
-          <span class="text-slate-400 text-[11px]">C (Free CPU)</span>
-        </div>
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-cyan-400 font-bold block text-sm">0.18</span>
-          <span class="text-slate-400 text-[11px]">M (Free RAM)</span>
-        </div>
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-purple-400 font-bold block text-sm">0.25</span>
-          <span class="text-slate-400 text-[11px]">G (GPU Match)</span>
-        </div>
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-emerald-400 font-bold block text-sm">0.12</span>
-          <span class="text-slate-400 text-[11px]">L (Inverse Load)</span>
-        </div>
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-yellow-400 font-bold block text-sm">0.08</span>
-          <span class="text-slate-400 text-[11px]">N (Low Latency)</span>
-        </div>
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-pink-400 font-bold block text-sm">0.10</span>
-          <span class="text-slate-400 text-[11px]">R (Reliability)</span>
-        </div>
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
-          <span class="text-amber-400 font-bold block text-sm">0.05</span>
-          <span class="text-slate-400 text-[11px]">P (Bin Packing)</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Security & Audit Trail -->
+    <!-- User RBAC Governance Table -->
     <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
       <div class="flex justify-between items-center">
         <div>
-          <h2 class="text-base font-bold text-white">Append-Only Audit Trail</h2>
-          <p class="text-xs text-slate-400">Verifiable chronological audit log of cluster decisions and operations</p>
+          <h2 class="text-base font-bold text-white">User Accounts & Role Permissions (RBAC)</h2>
+          <p class="text-xs text-slate-400">Promote or assign permissions (Compute Client, Compute Provider, Administrator)</p>
         </div>
       </div>
 
@@ -163,11 +121,65 @@
         <table class="w-full text-left text-xs font-mono">
           <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
             <tr>
+              <th class="p-3">Username & Email</th>
+              <th class="p-3">Current Role</th>
+              <th class="p-3">Account Status</th>
+              <th class="p-3">Target Portal</th>
+              <th class="p-3 text-right">Change Role</th>
+            </tr>
+          </thead>
+          <tbody id="usersTable" class="divide-y divide-slate-800">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Global Workload Fleet -->
+    <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-base font-bold text-white">Global Workload Allocations</h2>
+          <p class="text-xs text-slate-400">All submitted jobs and their 7-factor allocation scores</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+            <tr>
+              <th class="p-3">Workload Name</th>
+              <th class="p-3">Image</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Assigned Host</th>
+              <th class="p-3">Placement Score</th>
+              <th class="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTable" class="divide-y divide-slate-800">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Audit Trail -->
+    <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-base font-bold text-white">Immutable Cluster Audit Log</h2>
+          <p class="text-xs text-slate-400">Tamper-evident log of scheduling events and governance operations</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto max-h-60">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
+            <tr>
               <th class="p-3">Timestamp</th>
               <th class="p-3">Action</th>
               <th class="p-3">Target</th>
               <th class="p-3">Outcome</th>
-              <th class="p-3">Evidence Details</th>
             </tr>
           </thead>
           <tbody id="auditTable" class="divide-y divide-slate-800">
@@ -179,36 +191,65 @@
 
   </main>
 
+  <!-- Logs Modal -->
+  <div id="logsModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 font-mono">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h3 id="logsModalTitle" class="text-white font-bold text-sm">Cluster Runtime Console</h3>
+          <p id="logsModalSubtitle" class="text-slate-400 text-xs">Output telemetry</p>
+        </div>
+        <button onclick="closeLogsModal()" class="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <pre id="logsModalBody" class="bg-black/90 p-4 rounded-xl text-emerald-400 text-xs font-mono overflow-x-auto max-h-96 whitespace-pre-wrap select-all border border-slate-800">
+Loading logs...
+      </pre>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="closeLogsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let token = localStorage.getItem('dccn_token') || '';
 
     async function loadData() {
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
+      const user = await authGuard.verifyAndEnforce(['admin'], 'Administrator Governance Console');
+      if (!user) return;
+      token = authGuard.token;
 
-      // Load nodes
+      // 1. Dashboard summary
       try {
-        const nr = await fetch('/api/v1/nodes/', { headers: { 'Authorization': `Bearer ${token}` } });
+        const dr = await fetch('/api/v1/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (dr.ok) {
+          const dash = await dr.json();
+          document.getElementById('statNodes').textContent = dash.nodes.total;
+          document.getElementById('statOnline').textContent = `${dash.nodes.online} online`;
+          document.getElementById('statJobs').textContent = dash.jobs.total;
+          document.getElementById('statQueued').textContent = `${dash.jobs.queued} in queue`;
+        }
+      } catch (e) {}
+
+      // 2. Nodes
+      try {
+        const nr = await fetch('/api/v1/nodes/all', { headers: { 'Authorization': `Bearer ${token}` } });
         if (nr.ok) {
           const nodes = await nr.json();
-          document.getElementById('statNodes').textContent = nodes.length;
-          let online = 0; let cores = 0; let ram = 0; let gpus = 0;
-          nodes.forEach(n => {
-            if (n.status === 'online') online++;
-            cores += n.cpu_cores;
-            ram += n.ram_total_mb;
-            gpus += n.gpu_count;
-          });
-          document.getElementById('statOnline').textContent = `${online} online`;
-          document.getElementById('statCpu').textContent = `${cores} Cores`;
-          document.getElementById('statRam').textContent = `${(ram/1024).toFixed(1)} GB RAM`;
-          document.getElementById('statGpu').textContent = `${gpus} Devices`;
-
+          let cores = 0; let ramMb = 0; let gpus = 0;
           const tbody = document.getElementById('nodesTable');
           tbody.innerHTML = '';
           nodes.forEach(node => {
+            cores += node.cpu_cores;
+            ramMb += node.ram_total_mb;
+            gpus += node.gpu_count;
+
+            const isPending = node.status === 'pending_approval';
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-900/60 transition';
             tr.innerHTML = `
@@ -217,7 +258,11 @@
                 <span class="block text-[10px] text-slate-500">${node.hostname}</span>
               </td>
               <td class="p-3">
-                <span class="px-2 py-0.5 rounded text-[10px] ${node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : (node.status === 'pending_approval' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-slate-800 text-slate-400')}">
+                <span class="px-2 py-0.5 rounded text-[10px] ${
+                  node.status === 'online' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                  isPending ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                  'bg-slate-800 text-slate-400'
+                }">
                   ${node.status.toUpperCase()}
                 </span>
               </td>
@@ -225,8 +270,52 @@
               <td class="p-3">${(node.ram_total_mb / 1024).toFixed(1)} GB</td>
               <td class="p-3">${node.gpu_count > 0 ? `<span class="text-purple-400 font-bold">${node.gpu_count}x ${node.gpu_model}</span>` : 'None'}</td>
               <td class="p-3 text-[10px] text-slate-400">${node.last_seen ? new Date(node.last_seen).toLocaleTimeString() : 'Never'}</td>
-              <td class="p-3 text-right space-x-1.5">
-                ${node.status === 'pending_approval' ? `<button onclick="approveNode('${node.id}')" class="px-2.5 py-1 bg-emerald-900 text-emerald-300 rounded text-[10px]">Approve</button>` : ''}
+              <td class="p-3 text-right space-x-1">
+                ${isPending ? `<button onclick="approveNode('${node.id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold">Approve</button>` : ''}
+                <button onclick="toggleNodeDrain('${node.id}', '${node.status}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">
+                  ${node.status === 'drained' ? 'Resume' : 'Drain'}
+                </button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+          document.getElementById('statCpu').textContent = `${cores} Cores`;
+          document.getElementById('statRam').textContent = `${(ramMb / 1024).toFixed(1)} GB RAM`;
+          document.getElementById('statGpu').textContent = `${gpus} Devices`;
+        }
+      } catch (e) {}
+
+      // 3. Users RBAC
+      try {
+        const ur = await fetch('/api/v1/admin/users', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (ur.ok) {
+          const users = await ur.json();
+          const tbody = document.getElementById('usersTable');
+          tbody.innerHTML = '';
+          users.forEach(u => {
+            const roleBadgeClass = u.role === 'admin' ? 'bg-purple-950 text-purple-300 border-purple-800' :
+                                   u.role === 'compute_provider' ? 'bg-emerald-950 text-emerald-300 border-emerald-800' :
+                                   'bg-blue-950 text-blue-300 border-blue-800';
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3">
+                <span class="font-bold text-white text-xs">${u.username}</span>
+                <span class="block text-[10px] text-slate-500">${u.email}</span>
+              </td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded text-[10px] border ${roleBadgeClass}">
+                  ${u.role}
+                </span>
+              </td>
+              <td class="p-3 text-emerald-400 font-semibold">${u.status.toUpperCase()}</td>
+              <td class="p-3 text-indigo-300">${u.portal_url || '/'}</td>
+              <td class="p-3 text-right">
+                <select onchange="changeUserRole('${u.id}', this.value)" class="bg-slate-800 text-white px-2 py-1 rounded text-[10px] border border-slate-700 focus:outline-none">
+                  <option value="compute_user" ${u.role === 'compute_user' ? 'selected' : ''}>Client</option>
+                  <option value="compute_provider" ${u.role === 'compute_provider' ? 'selected' : ''}>Provider</option>
+                  <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                </select>
               </td>
             `;
             tbody.appendChild(tr);
@@ -234,7 +323,42 @@
         }
       } catch (e) {}
 
-      // Load audit logs
+      // 4. Jobs
+      try {
+        const jr = await fetch('/api/v1/jobs/', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (jr.ok) {
+          const jobs = await jr.json();
+          const tbody = document.getElementById('jobsTable');
+          tbody.innerHTML = '';
+          jobs.forEach(job => {
+            const alloc = (job.allocations && job.allocations.length > 0) ? job.allocations[0] : null;
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-900/60 transition';
+            tr.innerHTML = `
+              <td class="p-3 font-bold text-white text-xs">${job.name}</td>
+              <td class="p-3 text-blue-300">${job.image_name}</td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded text-[10px] ${
+                  job.state === 'completed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                  job.state === 'running' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                  'bg-slate-800 text-slate-400'
+                }">
+                  ${job.state.toUpperCase()}
+                </span>
+              </td>
+              <td class="p-3 text-indigo-300">${alloc ? `Node ${alloc.node_id.substring(0,8)}...` : 'Unassigned'}</td>
+              <td class="p-3 text-emerald-400">${alloc ? alloc.score.toFixed(4) : '—'}</td>
+              <td class="p-3 text-right space-x-1">
+                ${alloc && job.state !== 'completed' ? `<button onclick="dispatchJob('${job.id}')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold">Dispatch</button>` : ''}
+                <button onclick="viewLogs('${job.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded text-[10px]">Logs</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {}
+
+      // 5. Audit logs
       try {
         const ar = await fetch('/api/v1/admin/audit?limit=15', { headers: { 'Authorization': `Bearer ${token}` } });
         if (ar.ok) {
@@ -245,11 +369,10 @@
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-900/60 transition';
             tr.innerHTML = `
-              <td class="p-3 text-slate-500">${new Date(log.created_at).toLocaleTimeString()}</td>
-              <td class="p-3 text-blue-300 font-bold">${log.action}</td>
-              <td class="p-3 text-slate-300">${log.target_type} (${log.target_id.substring(0,8)}...)</td>
-              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400">${log.outcome}</span></td>
-              <td class="p-3 text-[10px] text-slate-400 font-mono">${log.details ? JSON.stringify(log.details) : '—'}</td>
+              <td class="p-3 text-slate-400">${new Date(log.created_at).toLocaleTimeString()}</td>
+              <td class="p-3 text-white font-bold">${log.action}</td>
+              <td class="p-3 text-indigo-300">${log.target_type}/${log.target_id.substring(0,8)}</td>
+              <td class="p-3 text-emerald-400">${log.outcome}</td>
             `;
             tbody.appendChild(tr);
           });
@@ -257,14 +380,95 @@
       } catch (e) {}
     }
 
+    async function changeUserRole(userId, newRole) {
+      const resp = await fetch(`/api/v1/admin/users/${userId}/role?role=${newRole}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        loadData();
+      } else {
+        alert('Failed: ' + (await resp.text()));
+      }
+    }
+
     async function approveNode(nodeId) {
-      await fetch(`/api/v1/nodes/${nodeId}/approve`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-      loadData();
+      const resp = await fetch(`/api/v1/nodes/${nodeId}/approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        loadData();
+      } else {
+        alert('Failed: ' + (await resp.text()));
+      }
+    }
+
+    async function toggleNodeDrain(nodeId, currentStatus) {
+      const newStatus = currentStatus === 'drained' ? 'online' : 'drained';
+      const resp = await fetch(`/api/v1/nodes/${nodeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (resp.ok) {
+        loadData();
+      }
     }
 
     async function scheduleAll() {
-      await fetch('/api/v1/scheduler/schedule-all', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-      loadData();
+      const resp = await fetch('/api/v1/scheduler/schedule-all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        const res = await resp.json();
+        alert(`Scheduler Run Complete: ${res.scheduled} workloads placed, ${res.failed} queued.`);
+        loadData();
+      }
+    }
+
+    async function dispatchAll() {
+      const resp = await fetch('/api/v1/jobs/dispatch-all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        const res = await resp.json();
+        alert(`Dispatched and executed ${res.dispatched_count} workloads!`);
+        loadData();
+      }
+    }
+
+    async function dispatchJob(jobId) {
+      const resp = await fetch(`/api/v1/jobs/${jobId}/dispatch`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        loadData();
+        viewLogs(jobId);
+      }
+    }
+
+    async function viewLogs(jobId) {
+      document.getElementById('logsModal').classList.remove('hidden');
+      document.getElementById('logsModalBody').textContent = 'Loading execution output...';
+      try {
+        const resp = await fetch(`/api/v1/jobs/${jobId}/logs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          document.getElementById('logsModalTitle').textContent = `Logs: ${data.job_name}`;
+          document.getElementById('logsModalSubtitle').textContent = `Node: ${data.node_name || 'Assigned'} | Container: ${data.container_id || 'N/A'}`;
+          document.getElementById('logsModalBody').textContent = data.logs || 'No logs recorded.';
+        }
+      } catch (err) {}
+    }
+
+    function closeLogsModal() {
+      document.getElementById('logsModal').classList.add('hidden');
     }
 
     window.addEventListener('DOMContentLoaded', () => {
