@@ -46,11 +46,13 @@ async def create_job(
     db.add(requirements)
     await db.commit()
 
+    target_job_id = job.id
+
     # Automatically attempt scheduling upon submission
     from app.scheduler.scheduler import SchedulerService
     sched = SchedulerService()
     try:
-        await sched.schedule_job(job.id, db)
+        await sched.schedule_job(target_job_id, db)
     except Exception:
         pass
 
@@ -60,7 +62,8 @@ async def create_job(
             selectinload(Job.requirements),
             selectinload(Job.allocations).selectinload(Allocation.executions),
         )
-        .where(Job.id == job.id)
+        .execution_options(populate_existing=True)
+        .where(Job.id == target_job_id)
     )
     return result.scalar_one()
 
