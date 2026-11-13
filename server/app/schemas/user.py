@@ -19,8 +19,14 @@ class UserPermissions(BaseModel):
     can_submit_jobs: bool
     can_manage_nodes: bool
     can_approve_nodes: bool
+    can_drain_nodes: bool
     can_view_audit: bool
+    can_view_analytics: bool
+    can_manage_users: bool
+    can_view_all_jobs: bool
+    can_manage_billing: bool
     is_admin: bool
+    scopes: list[str] = []
 
 
 class UserResponse(BaseModel):

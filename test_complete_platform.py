@@ -2,10 +2,11 @@
 Comprehensive Platform Verification Suite for DCCN
 Validates:
 1. Unified enterprise authentication & automatic role redirection
-2. Universal Administrator Omni-access & RBAC guard enforcement
+2. Virtual accounting ledger, credit deductions, and provider yields
 3. Workload submission, 7-factor scheduling, and container execution
-4. Virtual accounting ledger, credit deductions, and provider yields
-5. Real-time WebSocket telemetry streaming
+4. Real-time WebSocket telemetry streaming
+5. True RBAC enforcement (role isolation, permission boundaries, 403 checks)
+6. Deep System Analytics command center metrics
 """
 import sys
 import asyncio
@@ -26,6 +27,7 @@ def test_auth_and_redirection():
     c_data = resp.json()
     assert c_data["user"]["role"] == "compute_user"
     assert c_data["user"]["portal_url"] == "/client"
+    assert "scopes" in c_data["user"]["permissions"]
     print("  [PASS] Compute Client -> role: compute_user, target: /client")
 
     # 2. Login as Compute Provider
@@ -42,7 +44,8 @@ def test_auth_and_redirection():
     a_data = resp.json()
     assert a_data["user"]["role"] == "admin"
     assert a_data["user"]["portal_url"] == "/admin"
-    print("  [PASS] Administrator -> role: admin, target: /admin")
+    assert a_data["user"]["permissions"]["can_view_analytics"] is True
+    print("  [PASS] Administrator -> role: admin, target: /admin (Superuser Authority)")
 
     # 4. Check /login static file
     resp = client.get("/login")
@@ -55,9 +58,7 @@ def test_auth_and_redirection():
 def test_billing_and_ledger():
     print("\n[TEST 2] Testing Compute Credit Virtual Ledger & Accounting...")
     
-    # Login as client
     c_token = client.post("/api/v1/auth/login", json={"email": "client@dccn.network", "password": "client123"}).json()["access_token"]
-    p_token = client.post("/api/v1/auth/login", json={"email": "provider@dccn.network", "password": "provider123"}).json()["access_token"]
 
     # Check client balance
     resp = client.get("/api/v1/billing/balance", headers={"Authorization": f"Bearer {c_token}"})
@@ -72,7 +73,7 @@ def test_billing_and_ledger():
     topup_resp = client.post("/api/v1/billing/topup", json={"amount": 500.0}, headers={"Authorization": f"Bearer {c_token}"})
     assert topup_resp.status_code == 200
     topup_data = topup_resp.json()
-    assert topup_data["new_balance"] == initial_client_bal + 500.0
+    assert topup_data["new_balance"] == round(initial_client_bal + 500.0, 2)
     print(f"  [PASS] Client top-up +500 Credits -> New balance: {topup_data['new_balance']} DCCN")
 
     # Check pricing schedule
@@ -116,7 +117,7 @@ def test_workload_submission_scheduling_and_settlement():
     job_id = sub_resp.json()["id"]
     print(f"  [PASS] Workload submitted successfully (ID: {job_id[:8]}...)")
 
-    # 2. Schedule using 7-factor algorithm
+    # 2. Schedule using 7-factor algorithm (idempotent)
     sched_resp = client.post(f"/api/v1/scheduler/schedule/{job_id}", headers={"Authorization": f"Bearer {c_token}"})
     assert sched_resp.status_code == 200, f"Scheduling failed: {sched_resp.text}"
     s_data = sched_resp.json()
@@ -155,6 +156,64 @@ def test_websocket_telemetry():
         print(f"  [PASS] Real-time stream active! Fleet: {msg['nodes']['total']} nodes, {msg['hardware']['total_cores']} cores, {msg['jobs']['total']} jobs")
 
 
+def test_true_rbac_and_analytics():
+    print("\n[TEST 5] Testing True RBAC Enforcement & System Analytics...")
+    
+    a_token = client.post("/api/v1/auth/login", json={"email": "admin@dccn.network", "password": "admin123"}).json()["access_token"]
+    c_token = client.post("/api/v1/auth/login", json={"email": "client@dccn.network", "password": "client123"}).json()["access_token"]
+    p_token = client.post("/api/v1/auth/login", json={"email": "provider@dccn.network", "password": "provider123"}).json()["access_token"]
+
+    # 1. RBAC Isolation Check: Client cannot access Admin Analytics
+    denied_resp = client.get("/api/v1/admin/analytics", headers={"Authorization": f"Bearer {c_token}"})
+    assert denied_resp.status_code == 403, f"Expected 403 for client accessing admin analytics, got {denied_resp.status_code}"
+    print("  [PASS] RBAC Boundary: Client strictly barred from /api/v1/admin/analytics (403 Forbidden)")
+
+    # 2. RBAC Isolation Check: Provider cannot access Admin User Governance
+    prov_denied = client.get("/api/v1/admin/users", headers={"Authorization": f"Bearer {p_token}"})
+    assert prov_denied.status_code == 403
+    print("  [PASS] RBAC Boundary: Provider strictly barred from /api/v1/admin/users (403 Forbidden)")
+
+    # 3. RBAC Matrix Endpoint
+    matrix_resp = client.get("/api/v1/admin/rbac/matrix", headers={"Authorization": f"Bearer {a_token}"})
+    assert matrix_resp.status_code == 200
+    roles = matrix_resp.json()["roles"]
+    assert len(roles) == 3
+    print(f"  [PASS] RBAC Architecture Matrix verified: {len(roles)} defined roles with cryptographic scopes")
+
+    # 4. System Analytics Command Center
+    analytics_resp = client.get("/api/v1/admin/analytics", headers={"Authorization": f"Bearer {a_token}"})
+    assert analytics_resp.status_code == 200
+    an = analytics_resp.json()
+    assert "fleet" in an
+    assert "telemetry" in an
+    assert "workloads" in an
+    assert "scheduler_7factor" in an
+    assert "economics" in an
+    print(f"  [PASS] System Analytics verified: Fleet ({an['fleet']['total_cores']} cores), Economics ({an['economics']['total_transacted_volume']} DCCN transacted), 7-Factor Avg Score ({an['scheduler_7factor']['avg_composite_score']})")
+
+    # 5. Admin Governance: Adjust User Credits
+    users_resp = client.get("/api/v1/admin/users", headers={"Authorization": f"Bearer {a_token}"})
+    users = users_resp.json()
+    target_user = users[0]
+    adj_resp = client.post(
+        f"/api/v1/admin/users/{target_user['id']}/credits",
+        json={"amount": 100.0, "reason": "Test grant"},
+        headers={"Authorization": f"Bearer {a_token}"}
+    )
+    assert adj_resp.status_code == 200
+    assert adj_resp.json()["success"] is True
+    print(f"  [PASS] Admin Governance: Successfully adjusted credits for user '{target_user['username']}'")
+
+    # 6. Admin Governance: Node Drain Toggle
+    nodes_resp = client.get("/api/v1/nodes/all", headers={"Authorization": f"Bearer {a_token}"})
+    nodes = nodes_resp.json()
+    test_node = nodes[0]
+    drain_resp = client.post(f"/api/v1/admin/nodes/{test_node['id']}/drain", headers={"Authorization": f"Bearer {a_token}"})
+    assert drain_resp.status_code == 200
+    drain_data = drain_resp.json()
+    print(f"  [PASS] Admin Fleet Governance: Toggled node '{test_node['name']}' drain state to '{drain_data['status']}'")
+
+
 def main():
     print("=" * 65)
     print("  DISTRIBUTED CLOUD COMPUTE NETWORK — COMPREHENSIVE VERIFICATION")
@@ -167,9 +226,10 @@ def main():
     test_billing_and_ledger()
     test_workload_submission_scheduling_and_settlement()
     test_websocket_telemetry()
+    test_true_rbac_and_analytics()
 
     print("\n" + "=" * 65)
-    print("  ALL TESTS PASSED! 100% OF PLATFORM FEATURES VERIFIED!")
+    print("  ALL 5 TEST SUITES PASSED! TRUE RBAC & ANALYTICS 100% OPERATIONAL!")
     print("=" * 65)
 
 

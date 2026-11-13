@@ -18,12 +18,29 @@ def build_user_response(user: User) -> UserResponse:
         "compute_provider": "/provider",
         "compute_user": "/client",
     }
+    is_adm = role_val == "admin"
+    is_client = role_val == "compute_user" or is_adm
+    is_prov = role_val == "compute_provider" or is_adm
+
+    if is_adm:
+        scopes = ["admin:*", "nodes:*", "jobs:*", "users:*", "billing:*", "analytics:*", "audit:*"]
+    elif role_val == "compute_provider":
+        scopes = ["nodes:register", "nodes:read_own", "nodes:drain_own", "heartbeat:send", "yield:read_own"]
+    else:
+        scopes = ["jobs:create", "jobs:read_own", "jobs:cancel_own", "billing:read_own", "billing:topup"]
+
     permissions = UserPermissions(
-        can_submit_jobs=role_val in ("compute_user", "admin"),
-        can_manage_nodes=role_val in ("compute_provider", "admin"),
-        can_approve_nodes=role_val == "admin",
-        can_view_audit=role_val == "admin",
-        is_admin=role_val == "admin",
+        can_submit_jobs=is_client,
+        can_manage_nodes=is_prov,
+        can_approve_nodes=is_adm,
+        can_drain_nodes=is_prov,
+        can_view_audit=is_adm,
+        can_view_analytics=is_adm,
+        can_manage_users=is_adm,
+        can_view_all_jobs=is_adm,
+        can_manage_billing=is_adm,
+        is_admin=is_adm,
+        scopes=scopes,
     )
     return UserResponse(
         id=user.id,
