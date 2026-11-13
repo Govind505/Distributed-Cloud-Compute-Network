@@ -3,6 +3,7 @@ from app.models.node import ComputeNode, ResourceSnapshot
 from app.models.job import Job, JobRequirement
 from app.models.allocation import Allocation, Execution
 from app.models.audit import AuditLog
+from app.models.ledger import CreditLedger, UserCreditBalance
 
 __all__ = [
     "User",
@@ -13,4 +14,6 @@ __all__ = [
     "Allocation",
     "Execution",
     "AuditLog",
+    "CreditLedger",
+    "UserCreditBalance",
 ]

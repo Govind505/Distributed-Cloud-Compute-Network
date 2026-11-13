@@ -30,13 +30,17 @@
       </div>
 
       <div class="flex items-center space-x-3">
+        <span id="wsStatusBadge" class="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-950/70 border border-emerald-800 text-[10px] text-emerald-400 font-mono">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>LIVE WS STREAM</span>
+        </span>
         <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
           <div class="w-2 h-2 rounded-full bg-purple-400"></div>
           <span id="navUserEmail">admin@dccn.network</span>
         </div>
         <button onclick="authGuard.logout()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-          <span>Switch Portal</span>
+          <span>Sign Out</span>
         </button>
       </div>
     </div>
@@ -471,9 +475,34 @@ Loading logs...
       document.getElementById('logsModal').classList.add('hidden');
     }
 
+    function initWebSocket() {
+      try {
+        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProto}//${window.location.host}/ws/telemetry`);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.nodes) {
+              document.getElementById('statNodes').textContent = msg.nodes.total;
+              document.getElementById('statOnline').textContent = `${msg.nodes.online} online`;
+            }
+            if (msg.hardware) {
+              document.getElementById('statCpu').textContent = `${msg.hardware.total_cores} Cores`;
+              document.getElementById('statRam').textContent = `${msg.hardware.total_ram_gb} GB RAM`;
+              document.getElementById('statGpu').textContent = `${msg.hardware.total_gpus} Devices`;
+            }
+          } catch (e) {}
+        };
+        ws.onclose = () => {
+          setTimeout(initWebSocket, 4000);
+        };
+      } catch (err) {}
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       loadData();
+      initWebSocket();
       setInterval(loadData, 5000);
     });
   </script>

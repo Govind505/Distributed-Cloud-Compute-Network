@@ -31,13 +31,17 @@
       </div>
 
       <div class="flex items-center space-x-3">
+        <span id="wsStatusBadge" class="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-950/70 border border-emerald-800 text-[10px] text-emerald-400 font-mono">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>LIVE WS STREAM</span>
+        </span>
         <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
           <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
           <span id="navUserEmail">provider@dccn.network</span>
         </div>
         <button onclick="authGuard.logout()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-          <span>Switch Portal</span>
+          <span>Sign Out</span>
         </button>
       </div>
     </div>
@@ -64,9 +68,9 @@
         <div class="text-xs text-slate-400 mt-1">Telemetry sampled every 5s</div>
       </div>
       <div class="glass-card p-5 rounded-2xl">
-        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Earned Compute Credits</div>
-        <div class="text-3xl font-extrabold text-amber-400 mt-1">1,420 DCCN</div>
-        <div class="text-xs text-slate-400 mt-1">Yield from shared vCPU/GPU</div>
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Earned Compute Yield</div>
+        <div class="text-3xl font-extrabold text-amber-400 mt-1" id="provYieldCredits">250.00 DCCN</div>
+        <div class="text-xs text-slate-400 mt-1">Host yield from shared vCPU/GPU</div>
       </div>
     </div>
 
@@ -395,10 +399,45 @@ Loading logs...
       document.getElementById('logsModal').classList.add('hidden');
     }
 
+    async function loadBilling() {
+      try {
+        const resp = await fetch('/api/v1/billing/balance', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          document.getElementById('provYieldCredits').textContent = `${data.balance.toFixed(2)} DCCN`;
+        }
+      } catch (err) {}
+    }
+
+    function initWebSocket() {
+      try {
+        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProto}//${window.location.host}/ws/telemetry`);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.nodes) {
+              document.getElementById('provOnlineNodes').textContent = `${msg.nodes.online} Online`;
+            }
+          } catch (e) {}
+        };
+        ws.onclose = () => {
+          setTimeout(initWebSocket, 4000);
+        };
+      } catch (err) {}
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       loadData();
-      setInterval(loadData, 5000);
+      loadBilling();
+      initWebSocket();
+      setInterval(() => {
+        loadData();
+        loadBilling();
+      }, 5000);
     });
   </script>
 </body>

@@ -30,6 +30,27 @@ class SchedulerService:
         if not job:
             return {"success": False, "message": "Job not found"}
 
+        if job.state == JobState.ALLOCATED:
+            alloc_res = await db.execute(
+                select(Allocation)
+                .options(selectinload(Allocation.node))
+                .where(Allocation.job_id == job_id)
+                .order_by(Allocation.created_at.desc())
+            )
+            alloc = alloc_res.scalars().first()
+            if alloc and alloc.state in (AllocationState.RESERVED, AllocationState.DISPATCHED):
+                node_name = alloc.node.name if alloc.node else "Online Node"
+                return {
+                    "success": True,
+                    "message": f"Job already allocated on node '{node_name}' with score {alloc.score:.4f}",
+                    "job_id": str(job.id),
+                    "node_id": str(alloc.node_id),
+                    "node_name": node_name,
+                    "score": round(alloc.score, 4),
+                    "score_breakdown": alloc.score_breakdown or {},
+                    "attempt": alloc.attempt,
+                }
+
         if job.state not in (JobState.QUEUED, JobState.PENDING):
             return {"success": False, "message": f"Job is in state {job.state.value}, cannot schedule"}
 

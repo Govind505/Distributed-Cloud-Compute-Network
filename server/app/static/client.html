@@ -31,13 +31,17 @@
       </div>
 
       <div class="flex items-center space-x-3">
+        <span id="wsStatusBadge" class="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-950/70 border border-emerald-800 text-[10px] text-emerald-400 font-mono">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>LIVE WS STREAM</span>
+        </span>
         <div class="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 font-mono text-slate-300">
           <div class="w-2 h-2 rounded-full bg-blue-400"></div>
           <span id="navUserEmail">client@dccn.network</span>
         </div>
         <button onclick="authGuard.logout()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-          <span>Switch Portal</span>
+          <span>Sign Out</span>
         </button>
       </div>
     </div>
@@ -63,10 +67,15 @@
         <div class="text-3xl font-extrabold text-purple-400 mt-1" id="clusterGpus">3 GPUs</div>
         <div class="text-xs text-purple-300 mt-1">NVIDIA RTX 3080 & Tesla T4</div>
       </div>
-      <div class="glass-card p-5 rounded-2xl">
-        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Virtual Compute Credits</div>
-        <div class="text-3xl font-extrabold text-emerald-400 mt-1">980 DCCN</div>
-        <div class="text-xs text-slate-400 mt-1">Elastic resource billing</div>
+      <div class="glass-card p-5 rounded-2xl flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Virtual Compute Credits</div>
+            <button onclick="topUpCredits()" class="text-[10px] px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700 text-emerald-300 font-mono font-bold transition">+500 Top-Up</button>
+          </div>
+          <div class="text-3xl font-extrabold text-emerald-400 mt-1" id="clientCreditBalance">1,000 DCCN</div>
+        </div>
+        <div class="text-xs text-slate-400 mt-1">Live consumption & ledger billing</div>
       </div>
     </div>
 
@@ -354,10 +363,63 @@ Loading container terminal output...
       }
     }
 
+    async function loadBilling() {
+      try {
+        const resp = await fetch('/api/v1/billing/balance', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          document.getElementById('clientCreditBalance').textContent = `${data.balance.toFixed(2)} DCCN`;
+        }
+      } catch (err) {}
+    }
+
+    async function topUpCredits() {
+      try {
+        const resp = await fetch('/api/v1/billing/topup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ amount: 500.0 })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          alert(`Top-up successful! Added +${data.added} DCCN Credits. New balance: ${data.new_balance.toFixed(2)} DCCN`);
+          loadBilling();
+        }
+      } catch (err) {
+        alert('Top-up request failed.');
+      }
+    }
+
+    function initWebSocket() {
+      try {
+        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProto}//${window.location.host}/ws/telemetry`);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.hardware) {
+              document.getElementById('clusterCores').textContent = `${msg.hardware.total_cores} Cores`;
+              document.getElementById('clusterGpus').textContent = `${msg.hardware.total_gpus} GPUs`;
+            }
+          } catch (e) {}
+        };
+        ws.onclose = () => {
+          setTimeout(initWebSocket, 4000);
+        };
+      } catch (err) {}
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       loadData();
-      setInterval(loadData, 5000);
+      loadBilling();
+      initWebSocket();
+      setInterval(() => {
+        loadData();
+        loadBilling();
+      }, 5000);
     });
   </script>
 </body>

@@ -194,7 +194,15 @@ async def dispatch_job(
 
     is_admin = current_user.role == UserRole.ADMIN
     is_owner = job.owner_id == current_user.id
-    if not (is_admin or is_owner):
+    is_provider = False
+    if current_user.role == UserRole.COMPUTE_PROVIDER:
+        node_ids_result = await db.execute(
+            select(ComputeNode.id).where(ComputeNode.provider_id == current_user.id)
+        )
+        provider_nodes = set(node_ids_result.scalars().all())
+        is_provider = any(a.node_id in provider_nodes for a in job.allocations)
+
+    if not (is_admin or is_owner or is_provider):
         raise HTTPException(status_code=403, detail="Access denied to dispatch this workload")
 
     if not job.allocations:

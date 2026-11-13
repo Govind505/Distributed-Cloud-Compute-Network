@@ -1,18 +1,22 @@
 import os
 import asyncio
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from app.config import get_settings
 from app.database import get_db, AsyncSessionLocal
 from app.database_seeder import auto_init_and_seed_db
+from app.models.node import ComputeNode, NodeStatus, ResourceSnapshot
+from app.models.job import Job, JobState
 from app.services.watchdog import WatchdogService
 from app.utils.dependencies import require_admin
-from app.api import auth, nodes, jobs, admin, scheduler
+from app.api import auth, nodes, jobs, admin, scheduler, billing
 
 settings = get_settings()
 watchdog_service = WatchdogService()
@@ -71,6 +75,7 @@ app.include_router(nodes.router, prefix=settings.API_V1_PREFIX)
 app.include_router(jobs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
 app.include_router(scheduler.router, prefix=settings.API_V1_PREFIX)
+app.include_router(billing.router, prefix=settings.API_V1_PREFIX)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(STATIC_DIR):
@@ -121,6 +126,70 @@ async def dashboard():
         "status": "running",
         "docs": "/docs",
     }
+
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    """High-frequency real-time WebSocket channel streaming cluster state and telemetry."""
+    await websocket.accept()
+    try:
+        while True:
+            async with AsyncSessionLocal() as db:
+                nodes_res = await db.execute(select(ComputeNode))
+                all_nodes = nodes_res.scalars().all()
+                online_count = sum(1 for n in all_nodes if n.status == NodeStatus.ONLINE)
+                total_nodes = len(all_nodes)
+                total_cores = sum(n.cpu_cores for n in all_nodes)
+                total_ram_mb = sum(n.ram_total_mb for n in all_nodes)
+                total_gpus = sum(n.gpu_count for n in all_nodes)
+                total_vram_mb = sum(n.gpu_vram_mb or 0 for n in all_nodes)
+
+                snaps_res = await db.execute(
+                    select(ResourceSnapshot).order_by(ResourceSnapshot.sampled_at.desc()).limit(20)
+                )
+                snaps = snaps_res.scalars().all()
+                avg_cpu = round(sum(s.cpu_usage_percent for s in snaps) / len(snaps), 1) if snaps else 20.0
+                total_active_containers = sum(s.active_containers for s in snaps) if snaps else 0
+
+                jobs_res = await db.execute(select(Job))
+                jobs = jobs_res.scalars().all()
+                queued_jobs = sum(1 for j in jobs if j.state == JobState.QUEUED)
+                running_jobs = sum(1 for j in jobs if j.state == JobState.RUNNING)
+                completed_jobs = sum(1 for j in jobs if j.state == JobState.COMPLETED)
+                failed_jobs = sum(1 for j in jobs if j.state == JobState.FAILED)
+
+                data = {
+                    "type": "telemetry_stream",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "nodes": {
+                        "total": total_nodes,
+                        "online": online_count,
+                        "offline": total_nodes - online_count,
+                    },
+                    "hardware": {
+                        "total_cores": total_cores,
+                        "total_ram_gb": round(total_ram_mb / 1024.0, 1),
+                        "total_gpus": total_gpus,
+                        "total_vram_gb": round(total_vram_mb / 1024.0, 1),
+                    },
+                    "cluster_load": {
+                        "avg_cpu_percent": avg_cpu,
+                        "active_containers": total_active_containers,
+                    },
+                    "jobs": {
+                        "total": len(jobs),
+                        "queued": queued_jobs,
+                        "running": running_jobs,
+                        "completed": completed_jobs,
+                        "failed": failed_jobs,
+                    }
+                }
+            await websocket.send_json(data)
+            await asyncio.sleep(1.5)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"[WebSocket Telemetry Notice] {e}")
 
 
 @app.post(f"{settings.API_V1_PREFIX}/system/watchdog-check")
