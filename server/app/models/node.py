@@ -33,6 +33,12 @@ class ComputeNode(Base):
     gpu_count: Mapped[int] = mapped_column(Integer, default=0)
     gpu_vram_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Cloud Broker & Arbitrage Metadata
+    cloud_provider: Mapped[str] = mapped_column(String(50), default="bare_metal", nullable=False)
+    region: Mapped[str] = mapped_column(String(50), default="global", nullable=False)
+    overcommit_ratio: Mapped[float] = mapped_column(Float, default=2.5, nullable=False)
+    cost_per_hour_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

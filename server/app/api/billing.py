@@ -7,10 +7,20 @@ from app.database import get_db
 from app.models.user import User
 from app.models.ledger import CreditLedger, UserCreditBalance
 from app.services.billing import BillingService
+from app.services.market import spot_market_service
 from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/billing", tags=["Billing & Virtual Ledger"])
 billing_service = BillingService()
+
+
+class ArbitrageCalcRequest(BaseModel):
+    preset_key: str = Field(default="hetzner_dedicated")
+    utilization_percent: float = Field(default=65.0, ge=10.0, le=100.0)
+    overcommit_ratio: float = Field(default=2.5, ge=1.0, le=8.0)
+    custom_cost_usd: float | None = None
+    custom_cores: int | None = None
+    custom_gpus: int | None = None
 
 
 class TopUpRequest(BaseModel):
@@ -91,8 +101,36 @@ async def get_pricing_schedule():
             "vcpu_core_per_hour": 10.0,
             "gpu_accelerator_per_hour": 50.0,
             "ram_gb_per_hour": 2.0,
+            "micro_tier_vcpu_per_hour": 2.5,
             "minimum_job_fee": 2.5,
+            "minimum_micro_job_fee": 0.5,
+        },
+        "fractional_slicing": {
+            "min_cpu_cores": 0.1,
+            "min_ram_mb": 64,
+            "overcommit_ratio": 2.5,
         },
         "provider_yield_share": "85%",
         "network_governance_fee": "15%",
     }
+
+
+@router.get("/arbitrage/presets")
+async def get_arbitrage_presets():
+    """Retrieve pre-configured cloud instance benchmark presets for provider arbitrage."""
+    return spot_market_service.CLOUD_PRESETS
+
+
+@router.post("/arbitrage/calculate")
+async def calculate_arbitrage_roi(
+    req: ArbitrageCalcRequest,
+):
+    """Calculate projected monthly revenues, cloud costs, and net ROI margin."""
+    return spot_market_service.calculate_cloud_arbitrage_roi(
+        preset_key=req.preset_key,
+        utilization_percent=req.utilization_percent,
+        overcommit_ratio=req.overcommit_ratio,
+        custom_cost_usd=req.custom_cost_usd,
+        custom_cores=req.custom_cores,
+        custom_gpus=req.custom_gpus,
+    )

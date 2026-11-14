@@ -1,7 +1,7 @@
 import uuid
 import random
 from datetime import datetime, timezone
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from app.database import engine, Base, AsyncSessionLocal
 from app.models.user import User, UserRole, UserStatus
 from app.models.node import ComputeNode, NodeStatus, ResourceSnapshot
@@ -75,9 +75,20 @@ async def _hydrate_subsystems_from_db(db):
 
 async def auto_init_and_seed_db():
     """Automatically ensure database tables exist and are populated with live enterprise cluster data."""
-    # 1. Create tables if they do not exist
+    # 1. Create tables if they do not exist & migrate new columns
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migrate new columns on existing SQLite tables
+        for col, col_type, default_val in [
+            ("cloud_provider", "VARCHAR(50)", "'bare_metal'"),
+            ("region", "VARCHAR(50)", "'global'"),
+            ("overcommit_ratio", "FLOAT", "2.5"),
+            ("cost_per_hour_usd", "FLOAT", "0.0"),
+        ]:
+            try:
+                await conn.execute(text(f"ALTER TABLE compute_nodes ADD COLUMN {col} {col_type} DEFAULT {default_val}"))
+            except Exception:
+                pass
 
     # 2. Check if cluster has already been seeded
     async with AsyncSessionLocal() as db:

@@ -13,6 +13,10 @@ class NodeRegister(BaseModel):
     gpu_model: str | None = None
     gpu_count: int = Field(default=0, ge=0)
     gpu_vram_mb: int | None = None
+    cloud_provider: str = Field(default="bare_metal", max_length=50)
+    region: str = Field(default="global", max_length=50)
+    overcommit_ratio: float = Field(default=2.5, ge=1.0, le=8.0)
+    cost_per_hour_usd: float = Field(default=0.0, ge=0.0)
     labels: dict | None = None
 
 
@@ -29,6 +33,10 @@ class NodeResponse(BaseModel):
     gpu_model: str | None
     gpu_count: int
     gpu_vram_mb: int | None
+    cloud_provider: str
+    region: str
+    overcommit_ratio: float
+    cost_per_hour_usd: float
     labels: dict | None
     last_seen: datetime | None
     created_at: datetime

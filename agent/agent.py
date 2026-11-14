@@ -25,12 +25,36 @@ async def login(client: httpx.AsyncClient, email: str, password: str) -> str:
     return token
 
 
+def detect_cloud_environment() -> tuple[str, str]:
+    """Auto-detect cloud host provider and region from hypervisor/metadata."""
+    # Heuristic checks for major cloud providers
+    try:
+        import os
+        if os.path.exists("/sys/class/dmi/id/sys_vendor"):
+            with open("/sys/class/dmi/id/sys_vendor", "r") as f:
+                vendor = f.read().lower()
+                if "amazon" in vendor:
+                    return "aws_spot", "us-east-1"
+                if "google" in vendor:
+                    return "gcp", "us-central1"
+                if "hetzner" in vendor:
+                    return "hetzner", "eu-central"
+                if "digitalocean" in vendor:
+                    return "digitalocean", "nyc1"
+    except Exception:
+        pass
+    return "bare_metal", "global"
+
+
 async def register_node(
     client: httpx.AsyncClient,
     token: str,
     name: str,
     simulated: bool = False,
     with_gpu: bool = False,
+    cloud_provider: str | None = None,
+    region: str | None = None,
+    overcommit_ratio: float = 2.5,
 ) -> str:
     """Register this host as a compute node."""
     info = get_system_info() if not simulated else {
@@ -40,12 +64,24 @@ async def register_node(
         "disk_total_mb": 102400,
     }
 
+    detected_cloud, detected_region = detect_cloud_environment()
+    final_cloud = cloud_provider or detected_cloud
+    final_region = region or detected_region
+
     payload = {
         "name": name,
         "hostname": info["hostname"],
         "cpu_cores": info["cpu_cores"],
         "ram_total_mb": info["ram_total_mb"],
         "disk_total_mb": info["disk_total_mb"],
+        "cloud_provider": final_cloud,
+        "region": final_region,
+        "overcommit_ratio": overcommit_ratio,
+        "labels": {
+            "source": "cloud_broker" if final_cloud != "bare_metal" else "bare_metal",
+            "cloud": final_cloud,
+            "region": final_region,
+        },
     }
 
     if with_gpu:
@@ -58,7 +94,7 @@ async def register_node(
         print(f"[ERROR] Node enrollment failed: {resp.text}")
         sys.exit(1)
     node_id = resp.json()["id"]
-    print(f"[OK] Compute host '{name}' enrolled into cluster (ID: {node_id})")
+    print(f"[OK] Compute host '{name}' ({final_cloud.upper()} | {final_region} | Overcommit: {overcommit_ratio}x) enrolled into cluster (ID: {node_id})")
     return node_id
 
 
@@ -123,30 +159,58 @@ async def heartbeat_loop(
         await asyncio.sleep(interval)
 
 
-async def run_single_agent(email: str, password: str, name: str, simulated: bool, with_gpu: bool):
+async def run_single_agent(
+    email: str,
+    password: str,
+    name: str,
+    simulated: bool,
+    with_gpu: bool,
+    cloud: str | None = None,
+    region: str | None = None,
+    overcommit: float = 2.5,
+):
     """Run a single agent daemon."""
     async with httpx.AsyncClient(timeout=30.0) as client:
         token = await login(client, email, password)
-        node_id = await register_node(client, token, name, simulated, with_gpu)
+        node_id = await register_node(
+            client=client,
+            token=token,
+            name=name,
+            simulated=simulated,
+            with_gpu=with_gpu,
+            cloud_provider=cloud,
+            region=region,
+            overcommit_ratio=overcommit,
+        )
         await heartbeat_loop(client, token, node_id, name, simulated)
 
 
 async def run_multiple_agents(email: str, password: str, count: int):
     """Run multiple simulated node agents concurrently."""
+    cloud_types = ["hetzner", "aws_spot", "runpod", "ovh", "bare_metal"]
     names = [
-        (f"Compute-Node-{i+1:02d}", False) if i < count // 2
-        else (f"GPU-Cluster-{i+1:02d}", True)
+        (f"Cloud-Host-{i+1:02d}", False, cloud_types[i % len(cloud_types)]) if i < count // 2
+        else (f"GPU-Cluster-{i+1:02d}", True, "runpod" if i % 2 == 0 else "aws_spot")
         for i in range(count)
     ]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         token = await login(client, email, password)
         node_ids = []
-        for name, with_gpu in names:
-            nid = await register_node(client, token, name, simulated=True, with_gpu=with_gpu)
+        for name, with_gpu, c_type in names:
+            nid = await register_node(
+                client=client,
+                token=token,
+                name=name,
+                simulated=True,
+                with_gpu=with_gpu,
+                cloud_provider=c_type,
+                region="us-east" if "aws" in c_type else "eu-central",
+                overcommit_ratio=2.5,
+            )
             node_ids.append((nid, name, with_gpu))
 
-        print(f"\n[AGENT] Running {count} simulated host agents. Press Ctrl+C to terminate.\n")
+        print(f"\n[AGENT] Running {count} cloud broker host agents. Press Ctrl+C to terminate.\n")
         tasks = [
             heartbeat_loop(client, token, nid, name, simulated=True)
             for nid, name, _ in node_ids
@@ -161,6 +225,9 @@ def main():
     parser.add_argument("--password", required=True, help="Provider account password")
     parser.add_argument("--simulate", action="store_true", help="Use simulated hardware telemetry")
     parser.add_argument("--gpu", action="store_true", help="Volunteer GPU accelerator")
+    parser.add_argument("--cloud", default=None, help="Cloud origin: hetzner, aws_spot, runpod, ovh, bare_metal")
+    parser.add_argument("--region", default=None, help="Cloud region: eu-central, us-east-1, etc.")
+    parser.add_argument("--overcommit", type=float, default=2.5, help="CPU overcommit multiplier (default: 2.5x)")
     parser.add_argument("--count", type=int, default=0, help="Run N concurrent simulated nodes")
     parser.add_argument("--server", default=SERVER_URL, help="Control plane URL")
     args = parser.parse_args()
@@ -173,7 +240,16 @@ def main():
         if args.count > 0:
             asyncio.run(run_multiple_agents(args.email, args.password, args.count))
         else:
-            asyncio.run(run_single_agent(args.email, args.password, args.name, args.simulate, args.gpu))
+            asyncio.run(run_single_agent(
+                email=args.email,
+                password=args.password,
+                name=args.name,
+                simulated=args.simulate,
+                with_gpu=args.gpu,
+                cloud=args.cloud,
+                region=args.region,
+                overcommit=args.overcommit,
+            ))
     except KeyboardInterrupt:
         print("\n[AGENT] Daemon shutdown cleanly.")
 

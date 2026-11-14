@@ -313,6 +313,95 @@ def test_platform_improvisations():
     print("  [PASS] 6. Admin Analytics birds-eye platform status includes all 5 advanced subsystems")
 
 
+def test_cloud_arbitrage_and_fractional_slicing():
+    print("\n[TEST 7] Testing Cloud Instance Broker, Arbitrage Engine & Fractional Slicing...")
+    p_token = client.post("/api/v1/auth/login", json={"email": "provider@dccn.network", "password": "provider123"}).json()["access_token"]
+    c_token = client.post("/api/v1/auth/login", json={"email": "client@dccn.network", "password": "client123"}).json()["access_token"]
+
+    # 1. Provider Registers Rented Cloud Node (Hetzner EX44 Arbitrage Host)
+    node_payload = {
+        "name": "Hetzner-Cloud-Broker-01",
+        "hostname": "ex44.hetzner.dccn.host",
+        "cpu_cores": 14,
+        "ram_total_mb": 65536,
+        "disk_total_mb": 512000,
+        "cloud_provider": "hetzner",
+        "region": "eu-central",
+        "overcommit_ratio": 2.5,
+        "cost_per_hour_usd": 0.066,
+    }
+    reg_resp = client.post("/api/v1/nodes/register", json=node_payload, headers={"Authorization": f"Bearer {p_token}"})
+    assert reg_resp.status_code == 201, f"Cloud node register failed: {reg_resp.text}"
+    cloud_node = reg_resp.json()
+    assert cloud_node["cloud_provider"] == "hetzner"
+    assert cloud_node["overcommit_ratio"] == 2.5
+    print(f"  [PASS] 1. Cloud Machine Enrolled: '{cloud_node['name']}' (HETZNER, 14 Cores x 2.5 Overcommit = 35 vCPU capacity)")
+
+    # 2. 1-Click Install Script Generator
+    script_resp = client.get("/api/v1/nodes/cloud/install-script?cloud_provider=hetzner&overcommit=2.5", headers={"Authorization": f"Bearer {p_token}"})
+    assert script_resp.status_code == 200
+    script_data = script_resp.json()
+    assert "one_line_bash" in script_data
+    assert "curl -sSL" in script_data["one_line_bash"]
+    print(f"  [PASS] 2. 1-Click Cloud Install Generator: Generated script for provider '{script_data['provider_email']}'")
+
+    # 3. Client Submits Fractional Micro-Container (0.25 vCPU, 256MB RAM)
+    micro_job_payload = {
+        "name": "Micro-Inference-Job-0.25vCPU",
+        "image_name": "python:3.11-slim",
+        "command": "python -c 'print(\"Executing fractional micro-task!\")'",
+        "priority": 7,
+        "timeout_seconds": 120,
+        "requirements": {
+            "cpu_cores": 0.25,
+            "ram_mb": 256,
+            "disk_mb": 128,
+            "gpu_count": 0,
+            "gpu_vram_mb": 0,
+        }
+    }
+    job_resp = client.post("/api/v1/jobs/", json=micro_job_payload, headers={"Authorization": f"Bearer {c_token}"})
+    assert job_resp.status_code == 201
+    micro_job = job_resp.json()
+    assert micro_job["requirements"]["cpu_cores"] == 0.25
+    print(f"  [PASS] 3. Fractional Micro-Workload Submitted: 0.25 vCPU, 256 MB RAM")
+
+    # Schedule the micro-job
+    sched_resp = client.post(f"/api/v1/scheduler/schedule/{micro_job['id']}", headers={"Authorization": f"Bearer {c_token}"})
+    assert sched_resp.status_code == 200
+    sched_data = sched_resp.json()
+    assert sched_data["success"] is True
+    print(f"  [PASS] 3. Fractional Slicing Scheduled: Assigned to '{sched_data['node_name']}' with 7-factor score {sched_data['score']}")
+
+    # Dispatch and execute micro-job
+    disp_resp = client.post(f"/api/v1/jobs/{micro_job['id']}/dispatch", headers={"Authorization": f"Bearer {c_token}"})
+    assert disp_resp.status_code == 200
+    exec_data = disp_resp.json()
+    assert exec_data["exit_code"] == 0
+    # Verify micro-tier fee settled at 0.50 credits minimum instead of 2.50
+    assert exec_data["billing"]["cost"] == 0.5
+    print(f"  [PASS] 3. Sub-Core Micro-Billing Settled: Debited {exec_data['billing']['cost']} credits (0.50 min), Provider Yield: {exec_data['billing']['provider_yield']} credits")
+
+    # 4. Arbitrage Calculator API
+    arb_resp = client.post(
+        "/api/v1/billing/arbitrage/calculate",
+        json={"preset_key": "hetzner_dedicated", "utilization_percent": 65.0, "overcommit_ratio": 2.5}
+    )
+    assert arb_resp.status_code == 200
+    arb = arb_resp.json()
+    assert arb["financials"]["profitable"] is True
+    assert arb["financials"]["monthly_net_profit_usd"] > 0
+    print(f"  [PASS] 4. Arbitrage Engine: Hetzner €44/mo -> Net Profit: +${arb['financials']['monthly_net_profit_usd']}/mo (+{arb['financials']['roi_margin_percent']}% ROI)")
+    print(f"  [PASS] 4. Market Disruption: {arb['market_disruption']['client_savings_vs_aws_percent']}% cheaper for clients vs AWS EC2!")
+
+    # 5. Spot Preemption Eviction & Failover Trigger
+    preempt_resp = client.post(f"/api/v1/nodes/{cloud_node['id']}/preempt", headers={"Authorization": f"Bearer {p_token}"})
+    assert preempt_resp.status_code == 200
+    preempt_data = preempt_resp.json()
+    assert preempt_data["action"] == "SPOT_PREEMPTION_MIGRATION_EXECUTED"
+    print(f"  [PASS] 5. Spot Interruption Trap: Host safely drained & failover migration triggered for preemption resilience")
+
+
 def main():
     print("=" * 65)
     print("  DISTRIBUTED CLOUD COMPUTE NETWORK — COMPREHENSIVE VERIFICATION")
@@ -327,9 +416,10 @@ def main():
     test_websocket_telemetry()
     test_true_rbac_and_analytics()
     test_platform_improvisations()
+    test_cloud_arbitrage_and_fractional_slicing()
 
     print("\n" + "=" * 65)
-    print("  ALL 6 TEST SUITES PASSED! 5 ADVANCED IMPROVISATIONS 100% OPERATIONAL!")
+    print("  ALL 7 TEST SUITES PASSED! HYPER-AFFORDABLE CLOUD BROKER 100% OPERATIONAL!")
     print("=" * 65)
 
 

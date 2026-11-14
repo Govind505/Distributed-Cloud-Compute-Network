@@ -41,10 +41,12 @@ def is_node_eligible(
     node_id_str = str(node.id)
     reserved = reserved_resources.get(node_id_str, {"cpu": 0, "ram": 0, "disk": 0, "gpu": 0})
 
-    # 1. Check CPU: free_cpu = total_cores * (1 - usage/100) - reserved
-    free_cpu = node.cpu_cores * (1 - cpu_usage / 100) - reserved["cpu"]
+    # 1. Check CPU with Fractional Overcommit Slicing
+    overcommit = getattr(node, "overcommit_ratio", 2.5) or 2.5
+    effective_cores = node.cpu_cores * overcommit
+    free_cpu = effective_cores * (1.0 - (cpu_usage / 100.0)) - reserved["cpu"]
     if free_cpu < requirements.cpu_cores:
-        return False, f"Insufficient CPU: {free_cpu:.1f} free < {requirements.cpu_cores} required"
+        return False, f"Insufficient CPU: {free_cpu:.2f} free < {requirements.cpu_cores} required (Overcommit: {overcommit}x)"
 
     # 2. Check RAM
     free_ram = ram_free - reserved["ram"]

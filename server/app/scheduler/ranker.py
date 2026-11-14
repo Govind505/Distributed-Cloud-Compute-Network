@@ -36,7 +36,7 @@ def _normalize(value: float, min_val: float = 0.0, max_val: float = 1.0) -> floa
 
 def score_node(
     node: ComputeNode,
-    snapshot: ResourceSnapshot,
+    snapshot: ResourceSnapshot | None,
     requirements: JobRequirement,
     reserved_resources: dict,
     max_rtt: float = 100.0,
@@ -45,7 +45,7 @@ def score_node(
     
     Args:
         node: The compute node
-        snapshot: Latest resource snapshot
+        snapshot: Latest resource snapshot (or None for freshly registered nodes)
         requirements: Job requirements
         reserved_resources: Already reserved resources on this node
         max_rtt: Maximum RTT in the cluster for normalization
@@ -56,12 +56,18 @@ def score_node(
     node_id_str = str(node.id)
     reserved = reserved_resources.get(node_id_str, {"cpu": 0, "ram": 0, "disk": 0, "gpu": 0})
 
-    # C - Normalized free CPU (higher free = better)
-    free_cpu = node.cpu_cores * (1 - snapshot.cpu_usage_percent / 100) - reserved["cpu"]
-    cpu_score = _normalize(free_cpu / max(node.cpu_cores, 1))
+    cpu_usage = snapshot.cpu_usage_percent if snapshot is not None else 10.0
+    ram_free_val = snapshot.ram_free_mb if snapshot is not None else int(node.ram_total_mb * 0.8)
+    rtt_val = snapshot.rtt_ms if snapshot is not None else 5.0
+
+    # C - Normalized free CPU with overcommit factor
+    overcommit = getattr(node, "overcommit_ratio", 2.5) or 2.5
+    effective_cores = node.cpu_cores * overcommit
+    free_cpu = effective_cores * (1.0 - (cpu_usage / 100.0)) - reserved["cpu"]
+    cpu_score = _normalize(free_cpu / max(effective_cores, 1.0))
 
     # M - Normalized free memory
-    free_ram = snapshot.ram_free_mb - reserved["ram"]
+    free_ram = ram_free_val - reserved["ram"]
     mem_score = _normalize(free_ram / max(node.ram_total_mb, 1))
 
     # G - GPU suitability
@@ -81,11 +87,11 @@ def score_node(
             gpu_score = 0.0
 
     # L - Inverse utilization (lower CPU usage = higher score)
-    load_score = 1.0 - (snapshot.cpu_usage_percent / 100.0)
+    load_score = 1.0 - (cpu_usage / 100.0)
 
     # N - Inverse network latency
     if max_rtt > 0:
-        network_score = 1.0 - _normalize(snapshot.rtt_ms, 0, max_rtt)
+        network_score = 1.0 - _normalize(rtt_val, 0, max_rtt)
     else:
         network_score = 1.0
 
@@ -132,8 +138,8 @@ def rank_nodes(
     Returns list of (node, score, breakdown) sorted by score descending.
     """
     # Find max RTT for normalization
-    max_rtt = max((snap.rtt_ms for _, snap, _ in eligible), default=1.0)
-    if max_rtt == 0:
+    max_rtt = max((snap.rtt_ms for _, snap, _ in eligible if snap is not None), default=1.0)
+    if max_rtt <= 0:
         max_rtt = 1.0
 
     scored = []

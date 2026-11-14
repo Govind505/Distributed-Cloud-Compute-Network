@@ -98,6 +98,59 @@
       </div>
     </div>
 
+    <!-- Cloud Arbitrage & ROI Calculator Card -->
+    <div class="glass-card p-6 rounded-2xl border-l-4 border-indigo-500 space-y-4">
+      <div class="flex flex-wrap justify-between items-center gap-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center space-x-2">
+            <i data-lucide="calculator" class="w-5 h-5 text-indigo-400"></i>
+            <span>Cloud Arbitrage & Profitability Calculator</span>
+            <span class="px-2 py-0.5 text-[10px] bg-indigo-500/20 text-indigo-300 rounded-full font-mono font-bold">75–85% Cheaper vs AWS</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Estimate your automated monthly net yield from renting cheap cloud machines (Hetzner, AWS Spot, RunPod) and listing them on DCCN.</p>
+        </div>
+        <button onclick="openCloudModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-lg shadow-indigo-500/20">
+          <i data-lucide="cloud" class="w-4 h-4"></i>
+          <span>1-Click Connect Cloud Instance</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1">Target Cloud Instance</label>
+          <select id="calcPreset" onchange="runArbitrageCalc()" class="w-full px-3 py-2 rounded-xl glass-input text-white text-xs font-mono">
+            <option value="hetzner_dedicated">Hetzner EX44 (€44/mo Dedicated - 14 Cores / 64GB)</option>
+            <option value="aws_spot_c6i">AWS c6i.4xlarge Spot ($72/mo - 16 vCPU / 32GB)</option>
+            <option value="runpod_rtx4090">RunPod RTX 4090 ($155/mo - 24GB VRAM / 8 vCPU)</option>
+            <option value="ovh_vps">OVH VPS Elite ($38/mo - 8 vCPU / 32GB)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1">Expected Utilization: <span id="calcUtilLabel" class="text-emerald-400 font-bold">65%</span></label>
+          <input type="range" id="calcUtil" min="20" max="95" value="65" oninput="document.getElementById('calcUtilLabel').textContent = this.value + '%'; runArbitrageCalc()" class="w-full accent-emerald-500 mt-2">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1">CFS Overcommit Ratio</label>
+          <select id="calcOvercommit" onchange="runArbitrageCalc()" class="w-full px-3 py-2 rounded-xl glass-input text-white text-xs font-mono">
+            <option value="2.5" selected>2.5x (Safe High-Density Packing)</option>
+            <option value="3.0">3.0x (Aggressive Batch Packing)</option>
+            <option value="4.0">4.0x (Maximum Microservice Density)</option>
+          </select>
+        </div>
+        <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col justify-center">
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Projected Net Monthly Profit</div>
+          <div class="text-xl font-extrabold text-emerald-400 font-mono mt-0.5" id="calcNetProfit">+$54.80 / mo</div>
+          <div class="text-[10px] text-indigo-300 font-mono" id="calcRoiMargin">+114.2% Net ROI</div>
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 text-xs font-mono flex flex-wrap justify-between items-center gap-2 text-slate-300" id="calcSummaryBox">
+        <span>Underlying Cloud Cost: <strong class="text-rose-400 font-mono" id="calcCloudCost">$48.00/mo</strong></span>
+        <span>DCCN Gross Yield: <strong class="text-emerald-400 font-mono" id="calcGrossYield">$102.80/mo (10,280 credits)</strong></span>
+        <span>End-User Price vs AWS: <strong class="text-purple-400 font-mono" id="calcSavings">76.2% Cheaper</strong></span>
+      </div>
+    </div>
+
     <!-- Contributed Nodes Table -->
     <div class="glass-card rounded-2xl overflow-hidden p-6 space-y-4">
       <div class="flex justify-between items-center">
@@ -112,6 +165,7 @@
           <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase font-semibold">
             <tr>
               <th class="p-3">Host Identity</th>
+              <th class="p-3">Cloud Origin / Overcommit</th>
               <th class="p-3">Status</th>
               <th class="p-3">CPU Cores</th>
               <th class="p-3">RAM</th>
@@ -195,11 +249,82 @@
             <input type="number" id="nodeGpuCount" value="0" min="0" class="w-full px-3 py-2 rounded-xl glass-input text-white">
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Cloud Origin / Provider</label>
+            <select id="nodeCloudProvider" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+              <option value="bare_metal">Bare Metal / Local Machine</option>
+              <option value="hetzner">Hetzner Cloud / Dedicated</option>
+              <option value="aws_spot">Amazon Web Services (EC2 Spot)</option>
+              <option value="runpod">RunPod GPU Cloud</option>
+              <option value="ovh">OVHcloud VPS / Dedicated</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Overcommit Factor</label>
+            <select id="nodeOvercommit" class="w-full px-3 py-2 rounded-xl glass-input text-white">
+              <option value="2.5" selected>2.5x (Safe Packing)</option>
+              <option value="3.0">3.0x (Aggressive Batch)</option>
+              <option value="4.0">4.0x (Microservice Density)</option>
+              <option value="1.0">1.0x (Strict Dedicated)</option>
+            </select>
+          </div>
+        </div>
         <div class="flex justify-end space-x-2 pt-2 border-t border-slate-800">
           <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancel</button>
           <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow">Register Node</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 1-Click Cloud Machine Connection Modal -->
+  <div id="cloudModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 font-mono text-xs">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="cloud" class="w-5 h-5 text-indigo-400"></i>
+          <h3 class="text-white font-bold text-sm">Host Rented Cloud Machine on DCCN</h3>
+        </div>
+        <button onclick="closeCloudModal()" class="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <p class="text-slate-400 text-[11px] leading-relaxed">
+        Select your underlying cloud host. Paste the command into your cloud VM terminal to automatically install the daemon, configure cgroup v2 slices, and begin earning automated credit yield.
+      </p>
+
+      <div class="flex space-x-2 border-b border-slate-800 pb-2">
+        <button onclick="selectCloudPreset('hetzner')" id="cloudTab-hetzner" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold">Hetzner</button>
+        <button onclick="selectCloudPreset('aws_spot')" id="cloudTab-aws_spot" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold">AWS Spot</button>
+        <button onclick="selectCloudPreset('runpod')" id="cloudTab-runpod" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold">RunPod</button>
+        <button onclick="selectCloudPreset('ovh')" id="cloudTab-ovh" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold">OVHcloud</button>
+      </div>
+
+      <div class="space-y-2">
+        <div class="text-slate-400 text-[11px]">1-Line Auto-Install Command (Bash):</div>
+        <div class="flex items-center space-x-2">
+          <input type="text" readonly id="cloudInstallBash" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 text-xs font-mono select-all">
+          <button onclick="copyToClipboard('cloudInstallBash')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shrink-0">Copy</button>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <div class="text-slate-400 text-[11px]">Direct Python Daemon Runner:</div>
+        <div class="flex items-center space-x-2">
+          <input type="text" readonly id="cloudInstallPy" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-indigo-300 text-xs font-mono select-all">
+          <button onclick="copyToClipboard('cloudInstallPy')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shrink-0">Copy</button>
+        </div>
+      </div>
+
+      <div class="p-3 bg-indigo-950/40 border border-indigo-800 rounded-xl text-[11px] text-indigo-200">
+        <strong>Automatic Slicing:</strong> Slices this host into fractional micro-containers with a <strong>2.5x overcommit factor</strong> to maximize node utilization and monthly net profit.
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="closeCloudModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Close</button>
+      </div>
     </div>
   </div>
 
@@ -251,12 +376,24 @@ Loading logs...
           tbody.innerHTML = '';
           nodes.forEach(node => {
             const isDrained = node.status === 'drained';
+            const cloudBadge = (node.cloud_provider === 'hetzner') ? 'bg-indigo-950 text-indigo-400 border-indigo-800' :
+                               (node.cloud_provider === 'aws_spot') ? 'bg-amber-950 text-amber-400 border-amber-800' :
+                               (node.cloud_provider === 'runpod') ? 'bg-purple-950 text-purple-400 border-purple-800' :
+                               (node.cloud_provider === 'ovh') ? 'bg-sky-950 text-sky-400 border-sky-800' :
+                               'bg-slate-800 text-slate-400 border-slate-700';
+
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-900/60 transition';
             tr.innerHTML = `
               <td class="p-3">
                 <span class="font-bold text-white text-xs">${node.name}</span>
                 <span class="block text-[10px] text-slate-500">${node.hostname}</span>
+              </td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${cloudBadge}">
+                  ${(node.cloud_provider || 'bare_metal').toUpperCase()}
+                </span>
+                <span class="block text-[10px] text-slate-500 font-mono mt-0.5">${node.overcommit_ratio || 2.5}x Overcommit</span>
               </td>
               <td class="p-3">
                 <span class="px-2 py-0.5 rounded text-[10px] ${
@@ -360,6 +497,8 @@ Loading logs...
         gpu_model: document.getElementById('nodeGpuModel').value || null,
         gpu_count: parseInt(document.getElementById('nodeGpuCount').value) || 0,
         gpu_vram_mb: parseInt(document.getElementById('nodeGpuCount').value) > 0 ? 8192 : 0,
+        cloud_provider: document.getElementById('nodeCloudProvider') ? document.getElementById('nodeCloudProvider').value : 'bare_metal',
+        overcommit_ratio: document.getElementById('nodeOvercommit') ? parseFloat(document.getElementById('nodeOvercommit').value) : 2.5,
       };
 
       const resp = await fetch('/api/v1/nodes/register', {
@@ -373,6 +512,68 @@ Loading logs...
       } else {
         alert('Registration failed: ' + (await resp.text()));
       }
+    }
+
+    let currentCloudPreset = 'hetzner';
+
+    function openCloudModal() {
+      document.getElementById('cloudModal').classList.remove('hidden');
+      selectCloudPreset('hetzner');
+    }
+
+    function closeCloudModal() {
+      document.getElementById('cloudModal').classList.add('hidden');
+    }
+
+    function selectCloudPreset(preset) {
+      currentCloudPreset = preset;
+      ['hetzner', 'aws_spot', 'runpod', 'ovh'].forEach(p => {
+        const btn = document.getElementById(`cloudTab-${p}`);
+        if (btn) {
+          if (p === preset) {
+            btn.className = 'px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold';
+          } else {
+            btn.className = 'px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold';
+          }
+        }
+      });
+
+      const userEmail = document.getElementById('navUserEmail').textContent || 'provider@dccn.network';
+      const origin = window.location.origin;
+      document.getElementById('cloudInstallBash').value = `curl -sSL ${origin}/api/v1/nodes/cloud/install-script | bash -s -- --email='${userEmail}' --cloud='${preset}' --overcommit=2.5`;
+      document.getElementById('cloudInstallPy').value = `python agent.py --email '${userEmail}' --password '<PASSWORD>' --cloud '${preset}' --overcommit 2.5 --server '${origin}'`;
+    }
+
+    function copyToClipboard(elementId) {
+      const input = document.getElementById(elementId);
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      alert('Copied command to clipboard!');
+    }
+
+    async function runArbitrageCalc() {
+      const preset = document.getElementById('calcPreset').value;
+      const util = parseFloat(document.getElementById('calcUtil').value);
+      const overcommit = parseFloat(document.getElementById('calcOvercommit').value);
+
+      try {
+        const resp = await fetch('/api/v1/billing/arbitrage/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preset_key: preset, utilization_percent: util, overcommit_ratio: overcommit })
+        });
+        if (resp.ok) {
+          const res = await resp.json();
+          const profit = res.financials.monthly_net_profit_usd;
+          const roi = res.financials.roi_margin_percent;
+          document.getElementById('calcNetProfit').textContent = `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} / mo`;
+          document.getElementById('calcNetProfit').className = `text-xl font-extrabold font-mono mt-0.5 ${profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+          document.getElementById('calcRoiMargin').textContent = `${roi >= 0 ? '+' : ''}${roi}% Net ROI`;
+          document.getElementById('calcCloudCost').textContent = `$${res.financials.monthly_cloud_expense_usd.toFixed(2)}/mo`;
+          document.getElementById('calcGrossYield').textContent = `$${res.financials.monthly_provider_yield_usd.toFixed(2)}/mo (${Math.round(res.financials.monthly_provider_yield_credits)} credits)`;
+          document.getElementById('calcSavings').textContent = `${res.market_disruption.client_savings_vs_aws_percent}% Cheaper`;
+        }
+      } catch (e) {}
     }
 
     async function viewLogs(jobId) {
@@ -433,6 +634,7 @@ Loading logs...
       lucide.createIcons();
       loadData();
       loadBilling();
+      runArbitrageCalc();
       initWebSocket();
       setInterval(() => {
         loadData();

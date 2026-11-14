@@ -64,9 +64,10 @@ class BillingService:
         # Base hourly rate: 10 credits/vCPU-hr, 50 credits/GPU-hr, 2 credits/GB-RAM-hr
         hourly_rate = (cores * 10.0) + (gpus * 50.0) + (ram_gb * 2.0)
         
-        # Calculate cost with 5.0 credit minimum for completed job run
+        # Micro-tier sub-core scaling (0.25 vCPU minimum is 0.5 credits; standard 1.0+ core is 2.5)
+        min_charge = 0.5 if cores < 1.0 else 2.5
         effective_duration = max(duration_seconds, 12.0)
-        cost = max(2.5, round((hourly_rate * (effective_duration / 3600.0)) * 50, 2))
+        cost = max(min_charge, round((hourly_rate * (effective_duration / 3600.0)) * 50, 2))
         provider_yield = round(cost * 0.85, 2)  # 85% yield to provider, 15% network maintenance fee
 
         # 1. Deduct from client

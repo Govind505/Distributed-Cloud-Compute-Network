@@ -33,6 +33,10 @@ async def register_node(
         gpu_model=node_data.gpu_model,
         gpu_count=node_data.gpu_count,
         gpu_vram_mb=node_data.gpu_vram_mb,
+        cloud_provider=node_data.cloud_provider,
+        region=node_data.region,
+        overcommit_ratio=node_data.overcommit_ratio,
+        cost_per_hour_usd=node_data.cost_per_hour_usd,
         labels=node_data.labels or {},
         status=initial_status,
         last_seen=datetime.now(timezone.utc),
@@ -227,3 +231,104 @@ async def approve_node(
     await db.commit()
     await db.refresh(node)
     return node
+
+
+@router.get("/cloud/install-script")
+async def get_cloud_install_script(
+    cloud_provider: str = Query(default="hetzner", description="Target cloud: hetzner, aws_spot, runpod, ovh, bare_metal"),
+    overcommit: float = Query(default=2.5, ge=1.0, le=8.0),
+    current_user: User = Depends(require_provider),
+):
+    """Generate 1-click cloud agent setup commands for rented VMs."""
+    email = current_user.email
+    bash_cmd = (
+        f"curl -sSL https://dccn.network/install-agent.sh | bash -s -- "
+        f"--email='{email}' --cloud='{cloud_provider}' --overcommit={overcommit} --spot-harvest"
+    )
+    python_cmd = (
+        f"python agent.py --email '{email}' --password '<YOUR_PASSWORD>' "
+        f"--cloud '{cloud_provider}' --overcommit {overcommit}"
+    )
+
+    return {
+        "provider_email": email,
+        "cloud_provider": cloud_provider,
+        "overcommit_ratio": overcommit,
+        "one_line_bash": bash_cmd,
+        "python_command": python_cmd,
+        "systemd_service_example": f"""[Unit]
+Description=DCCN Cloud Worker Agent ({cloud_provider.upper()})
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dccn/agent
+ExecStart=/usr/bin/python3 agent.py --email '{email}' --password '<PASSWORD>' --cloud '{cloud_provider}' --overcommit {overcommit}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target""",
+    }
+
+
+@router.post("/{node_id}/preempt")
+async def handle_node_spot_preemption(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Handle spot instance preemption notice (e.g. AWS 2-min spot interruption / Hetzner auction).
+    Safely drains node, pauses running container, and re-queues workloads for immediate failover.
+    """
+    from app.models.allocation import Allocation, AllocationState
+    from app.models.job import Job, JobState
+    from app.scheduler.scheduler import SchedulerService
+
+    result = await db.execute(select(ComputeNode).where(ComputeNode.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Compute node not found")
+
+    # Mark node drained
+    node.status = NodeStatus.DRAINED
+
+    # Find active allocations on this node
+    alloc_res = await db.execute(
+        select(Allocation)
+        .where(Allocation.node_id == node_id, Allocation.state.in_([AllocationState.RESERVED, AllocationState.RUNNING, AllocationState.DISPATCHED]))
+    )
+    allocations = alloc_res.scalars().all()
+    migrated_jobs = []
+
+    scheduler = SchedulerService()
+    for alloc in allocations:
+        alloc.state = AllocationState.CANCELLED
+        job_res = await db.execute(select(Job).where(Job.id == alloc.job_id))
+        job = job_res.scalar_one_or_none()
+        if job and job.state in (JobState.RUNNING, JobState.ALLOCATED, JobState.SCHEDULING):
+            job.state = JobState.QUEUED
+            job.priority = min(10, job.priority + 3)  # Elevate priority for fast failover
+            migrated_jobs.append(str(job.id))
+
+    await db.commit()
+
+    # Re-schedule migrated jobs to another healthy node
+    failover_results = []
+    for jid in migrated_jobs:
+        try:
+            res = await scheduler.schedule_job(uuid.UUID(jid), db)
+            failover_results.append({"job_id": jid, "re_scheduled": res.get("success", False)})
+        except Exception as e:
+            failover_results.append({"job_id": jid, "error": str(e)})
+
+    return {
+        "success": True,
+        "node_id": str(node_id),
+        "node_name": node.name,
+        "cloud_provider": node.cloud_provider,
+        "action": "SPOT_PREEMPTION_MIGRATION_EXECUTED",
+        "migrated_workloads": migrated_jobs,
+        "failover_results": failover_results,
+    }
