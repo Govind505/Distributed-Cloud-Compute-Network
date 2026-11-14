@@ -16,7 +16,7 @@ from app.models.node import ComputeNode, NodeStatus, ResourceSnapshot
 from app.models.job import Job, JobState
 from app.services.watchdog import WatchdogService
 from app.utils.dependencies import require_admin
-from app.api import auth, nodes, jobs, admin, scheduler, billing
+from app.api import auth, nodes, jobs, admin, scheduler, billing, platform
 
 settings = get_settings()
 watchdog_service = WatchdogService()
@@ -76,6 +76,7 @@ app.include_router(jobs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
 app.include_router(scheduler.router, prefix=settings.API_V1_PREFIX)
 app.include_router(billing.router, prefix=settings.API_V1_PREFIX)
+app.include_router(platform.router, prefix=settings.API_V1_PREFIX)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(STATIC_DIR):

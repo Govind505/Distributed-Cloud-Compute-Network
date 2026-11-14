@@ -16,6 +16,9 @@ from app.models.allocation import Allocation, AllocationState, Execution
 from app.models.node import ComputeNode
 from app.models.audit import AuditLog
 from app.services.billing import BillingService
+from app.services.verification import verification_service
+from app.services.tracing import tracing_service
+from app.services.isolation import isolation_service
 
 
 class ExecutionService:
@@ -49,11 +52,20 @@ class ExecutionService:
         job.state = JobState.RUNNING
         await db.commit()
 
-        # 2. Start Execution
+        # 2. Start Execution & Kernel Isolation Policy
         container_id = f"dccn-{uuid.uuid4().hex[:12]}"
         started_at = datetime.now(timezone.utc)
         allocation.state = AllocationState.RUNNING
         await db.commit()
+
+        # Enforce eBPF & cgroup v2 sandbox isolation parameters
+        isolation_policy = isolation_service.generate_isolation_policy(
+            job_id=str(job.id),
+            container_id=container_id,
+            cores_allocated=job.requirements.cpu_cores if job.requirements else 1.0,
+            ram_mb_allocated=job.requirements.ram_mb if job.requirements else 1024,
+            allow_external_egress=False,
+        )
 
         # 3. Attempt Docker Execution with automatic graceful fallback to synthetic runtime
         logs, exit_code, runtime_engine = self._execute_workload(job, node, container_id)
@@ -74,7 +86,26 @@ class ExecutionService:
         )
         db.add(execution)
 
-        # 4. Settle Billing & Deduct Credits
+        # 4. Cryptographic Proof Attestation (Verifiable Computing)
+        proof = verification_service.generate_proof(
+            job_id=str(job.id),
+            job_name=job.name,
+            node_id=str(node.id),
+            node_name=node.name,
+            container_id=container_id,
+            exit_code=exit_code,
+            output_logs=logs,
+        )
+
+        # 5. Distributed OpenTelemetry Tracing Graph
+        trace = tracing_service.create_job_trace(
+            job_id=str(job.id),
+            job_name=job.name,
+            node_name=node.name,
+            duration_seconds=duration_seconds,
+        )
+
+        # 6. Settle Billing & Deduct Credits
         billing_info = {}
         try:
             billing_info = await self.billing_service.settle_workload_execution(
@@ -86,7 +117,7 @@ class ExecutionService:
         except Exception as e:
             print(f"[DCCN Billing Warning] Settlement error: {e}")
 
-        # 5. Audit entry
+        # 7. Audit entry
         audit = AuditLog(
             actor_id=job.owner_id,
             action="workload_executed",
@@ -101,6 +132,10 @@ class ExecutionService:
                 "exit_code": exit_code,
                 "duration_seconds": duration_seconds,
                 "billing": billing_info,
+                "proof_id": proof.get("proof_id"),
+                "sha256_checksum": proof.get("sha256_checksum"),
+                "trace_id": trace.get("trace_id"),
+                "isolation_sandbox_id": isolation_policy.get("sandbox_id"),
             },
         )
         db.add(audit)
@@ -116,6 +151,9 @@ class ExecutionService:
             "state": allocation.state.value,
             "runtime_engine": runtime_engine,
             "billing": billing_info,
+            "proof": proof,
+            "trace_id": trace.get("trace_id"),
+            "isolation": isolation_policy,
             "logs": logs,
         }
 

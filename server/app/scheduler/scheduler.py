@@ -10,6 +10,7 @@ from app.models.allocation import Allocation, AllocationState
 from app.models.audit import AuditLog
 from app.scheduler.filter import filter_nodes
 from app.scheduler.ranker import rank_nodes
+from app.services.consensus import consensus_service
 
 
 class SchedulerService:
@@ -144,8 +145,19 @@ class SchedulerService:
             },
         )
         db.add(audit)
-
         await db.commit()
+
+        # Replicate scheduler commit across Raft HA consensus quorum
+        consensus_info = await consensus_service.replicate_log(
+            action="SCHEDULE_ALLOCATION",
+            data={
+                "job_id": str(job.id),
+                "job_name": job.name,
+                "node_id": str(best_node.id),
+                "node_name": best_node.name,
+                "score": round(best_score, 4),
+            },
+        )
 
         return {
             "success": True,
@@ -158,6 +170,11 @@ class SchedulerService:
             "nodes_checked": len(nodes),
             "nodes_eligible": len(eligible),
             "attempt": attempt_count,
+            "consensus": {
+                "term": consensus_service.current_term,
+                "commit_index": consensus_info.get("commit_index"),
+                "quorum_acks": consensus_info.get("quorum_acks"),
+            },
             "all_rankings": [
                 {
                     "node_id": str(n.id),

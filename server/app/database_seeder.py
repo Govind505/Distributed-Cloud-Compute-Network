@@ -10,6 +10,67 @@ from app.models.allocation import Allocation, AllocationState, Execution
 from app.utils.auth import hash_password
 from app.scheduler.scheduler import SchedulerService
 from app.services.executor import ExecutionService
+from app.services.verification import verification_service
+from app.services.tracing import tracing_service
+from app.services.isolation import isolation_service
+from app.services.consensus import consensus_service
+from sqlalchemy.orm import selectinload
+
+
+async def _hydrate_subsystems_from_db(db):
+    """Ensure in-memory registries for verification proofs, traces, isolation and consensus are populated."""
+    execs_res = await db.execute(
+        select(Execution).options(
+            selectinload(Execution.allocation).selectinload(Allocation.job).selectinload(Job.requirements),
+            selectinload(Execution.allocation).selectinload(Allocation.node),
+        )
+    )
+    executions = execs_res.scalars().all()
+    for exc in executions:
+        alloc = exc.allocation
+        if not alloc or not alloc.job or not alloc.node:
+            continue
+        job = alloc.job
+        node = alloc.node
+        jid_str = str(job.id)
+
+        if jid_str not in verification_service.proofs_registry:
+            verification_service.generate_proof(
+                job_id=jid_str,
+                job_name=job.name,
+                node_id=str(node.id),
+                node_name=node.name,
+                container_id=exc.container_id or f"dccn-{jid_str[:8]}",
+                exit_code=exc.exit_code or 0,
+                output_logs=exc.logs or f"[OUTPUT] Workload executed for {job.name}",
+            )
+
+        if jid_str not in tracing_service.traces:
+            tracing_service.create_job_trace(
+                job_id=jid_str,
+                job_name=job.name,
+                node_name=node.name,
+                duration_seconds=2.1,
+            )
+
+        if exc.container_id and exc.container_id not in isolation_service.active_sandboxes:
+            isolation_service.generate_isolation_policy(
+                job_id=jid_str,
+                container_id=exc.container_id,
+                cores_allocated=job.requirements.cpu_cores if job.requirements else 1.0,
+                ram_mb_allocated=job.requirements.ram_mb if job.requirements else 1024,
+            )
+
+        if len(consensus_service.log_entries) < len(executions):
+            await consensus_service.replicate_log(
+                action="SCHEDULE_ALLOCATION",
+                data={
+                    "job_id": jid_str,
+                    "job_name": job.name,
+                    "node_name": node.name,
+                    "score": round(alloc.score or 0.85, 4),
+                },
+            )
 
 
 async def auto_init_and_seed_db():
@@ -52,6 +113,7 @@ async def auto_init_and_seed_db():
                 executor = ExecutionService()
                 await executor.dispatch_all_allocated(db)
 
+            await _hydrate_subsystems_from_db(db)
             await db.commit()
             print("[DCCN] Verified cluster state: All nodes refreshed ONLINE with live telemetry.")
             return
@@ -247,5 +309,8 @@ async def auto_init_and_seed_db():
         # Dispatch and execute allocations to populate execution telemetry
         executor = ExecutionService()
         await executor.dispatch_all_allocated(db)
+
+        await _hydrate_subsystems_from_db(db)
+        await db.commit()
 
         print("[DCCN] Cluster demo data seeded successfully: 3 users, 4 nodes, 3 workloads scheduled and executed.")

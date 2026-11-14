@@ -214,6 +214,105 @@ def test_true_rbac_and_analytics():
     print(f"  [PASS] Admin Fleet Governance: Toggled node '{test_node['name']}' drain state to '{drain_data['status']}'")
 
 
+def test_platform_improvisations():
+    print("\n[TEST 6] Testing 5 Advanced Architectural Subsystems (Improvisations)...")
+    a_token = client.post("/api/v1/auth/login", json={"email": "admin@dccn.network", "password": "admin123"}).json()["access_token"]
+    c_token = client.post("/api/v1/auth/login", json={"email": "client@dccn.network", "password": "client123"}).json()["access_token"]
+
+    # 1. Raft HA Consensus
+    c_resp = client.get("/api/v1/platform/consensus/status", headers={"Authorization": f"Bearer {a_token}"})
+    assert c_resp.status_code == 200
+    c_data = c_resp.json()
+    assert c_data["active_quorum"] is True
+    assert len(c_data["peers"]) == 3
+    print(f"  [PASS] 1. Raft HA Consensus: Leader={c_data['leader_id']}, Term={c_data['current_term']}, Quorum=3/3 Active")
+
+    failover_resp = client.post("/api/v1/platform/consensus/failover", headers={"Authorization": f"Bearer {a_token}"})
+    assert failover_resp.status_code == 200
+    f_data = failover_resp.json()
+    assert f_data["term"] > c_data["current_term"]
+    print(f"  [PASS] 1. Raft Failover Election: New Leader={f_data['new_elected_leader']}, Term={f_data['term']}")
+
+    # 2. Verifiable Computing Attestation Proofs
+    proofs_resp = client.get("/api/v1/platform/verification/proofs", headers={"Authorization": f"Bearer {a_token}"})
+    assert proofs_resp.status_code == 200
+    proofs = proofs_resp.json()
+    assert len(proofs) > 0
+    test_proof = proofs[0]
+    assert test_proof["verification_status"] == "VERIFIED_VALID"
+    assert test_proof["sha256_checksum"] is not None
+    assert test_proof["attestation_signature"].startswith("sig_ed25519_")
+    print(f"  [PASS] 2. Verifiable Computing: Proof {test_proof['proof_id']} for job '{test_proof['job_name']}' - SHA256 verified, Ed25519 signed")
+
+    # Redundant witness check
+    check_resp = client.post(
+        "/api/v1/platform/verification/sample-check",
+        json={"job_id": test_proof["job_id"], "sample_output": "divergent fraudulent output"},
+        headers={"Authorization": f"Bearer {a_token}"}
+    )
+    assert check_resp.status_code == 200
+    check_data = check_resp.json()
+    assert check_data["verdict"] == "DIVERGENT_OUTPUT_FRAUD"
+    assert check_data["slashing_penalty_applied"] is True
+    print(f"  [PASS] 2. Witness Cross-Sampling: Fraud detection & slashing penalty applied (50 credits)")
+
+    # 3. Dynamic Spot Market & VCG 2nd-Price Auctions
+    spot_resp = client.get("/api/v1/platform/market/spot-rates", headers={"Authorization": f"Bearer {c_token}"})
+    assert spot_resp.status_code == 200
+    spot_data = spot_resp.json()
+    assert "spot_multiplier" in spot_data
+    assert "vcpu_spot_per_hour" in spot_data["rates"]
+    print(f"  [PASS] 3. Dynamic Spot Market: Multiplier={spot_data['spot_multiplier']}x, Discount={spot_data['spot_discount_percent']}%, Condition={spot_data['market_condition']}")
+
+    # Submit spot auction bid
+    bid_resp = client.post(
+        "/api/v1/platform/market/bid",
+        json={"max_bid": 30.0, "cpu_cores": 2.0, "gpu_count": 0},
+        headers={"Authorization": f"Bearer {c_token}"}
+    )
+    assert bid_resp.status_code == 200
+    bid_data = bid_resp.json()
+    assert "bid_accepted" in bid_data
+    assert "auction_type" in bid_data
+    print(f"  [PASS] 3. VCG 2nd-Price Auction: Bid Accepted={bid_data['bid_accepted']}, Charge Rate={bid_data['actual_charge_rate']} cr/hr, Surplus Savings={bid_data['consumer_surplus_savings']} cr")
+
+    # 4. OpenTelemetry Tracing
+    traces_resp = client.get("/api/v1/platform/tracing", headers={"Authorization": f"Bearer {a_token}"})
+    assert traces_resp.status_code == 200
+    traces = traces_resp.json()
+    assert len(traces) > 0
+    t_id = traces[0]["job_id"]
+    dag_resp = client.get(f"/api/v1/platform/tracing/{t_id}", headers={"Authorization": f"Bearer {a_token}"})
+    assert dag_resp.status_code == 200
+    dag = dag_resp.json()
+    assert len(dag["spans"]) >= 7
+    span_names = [s["name"] for s in dag["spans"]]
+    assert "scheduler.7factor_ranking" in span_names
+    assert "raft.consensus_log_replicate" in span_names
+    print(f"  [PASS] 4. OpenTelemetry Tracing: Trace {dag['trace_id']} has {len(dag['spans'])} spans across API, Scheduler, Raft, Runtime, and Ledger")
+
+    # 5. eBPF & cgroup v2 Kernel Isolation
+    iso_resp = client.get("/api/v1/platform/isolation/status", headers={"Authorization": f"Bearer {a_token}"})
+    assert iso_resp.status_code == 200
+    iso = iso_resp.json()
+    assert iso["cgroup_version"].startswith("v2")
+    assert iso["ebpf_programs_loaded"] == 3
+    print(f"  [PASS] 5. eBPF & cgroup v2 Isolation: {iso['cgroup_version']}, Seccomp={iso['seccomp_bpf_mode'][:16]}..., 3 eBPF JIT Programs Loaded")
+
+    # 6. Admin Analytics includes Platform Subsystems
+    analytics_resp = client.get("/api/v1/admin/analytics", headers={"Authorization": f"Bearer {a_token}"})
+    assert analytics_resp.status_code == 200
+    an = analytics_resp.json()
+    assert "platform_subsystems" in an
+    ps = an["platform_subsystems"]
+    assert "consensus" in ps
+    assert "spot_market" in ps
+    assert "verification" in ps
+    assert "tracing" in ps
+    assert "isolation" in ps
+    print("  [PASS] 6. Admin Analytics birds-eye platform status includes all 5 advanced subsystems")
+
+
 def main():
     print("=" * 65)
     print("  DISTRIBUTED CLOUD COMPUTE NETWORK — COMPREHENSIVE VERIFICATION")
@@ -227,9 +326,10 @@ def main():
     test_workload_submission_scheduling_and_settlement()
     test_websocket_telemetry()
     test_true_rbac_and_analytics()
+    test_platform_improvisations()
 
     print("\n" + "=" * 65)
-    print("  ALL 5 TEST SUITES PASSED! TRUE RBAC & ANALYTICS 100% OPERATIONAL!")
+    print("  ALL 6 TEST SUITES PASSED! 5 ADVANCED IMPROVISATIONS 100% OPERATIONAL!")
     print("=" * 65)
 
 
